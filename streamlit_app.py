@@ -3,9 +3,10 @@ import os
 import csv
 import sys
 import io
+import urllib.parse
 from datetime import datetime
 
-# Automatická oprava koncovky .xlsx: Pokud na serveru chybí balíček pro Excel, bleskově ho nainstalujeme
+# Automatická instalace balíčku pro Excel na serveru Streamlit Cloudu
 try:
     import openpyxl
 except ImportError:
@@ -35,11 +36,12 @@ HISTORIE_SOUBOR = "crm_historie_schuzek.csv"
 LANG = {
     "CS": {
         "title": "📱 RouteReport - Asistent v terénu",
-        "cfg_sec": "⚙️ Nastavení databáze zákazníků",
-        "cfg_info": "Nahrajte jakýkoliv soubor Excel (.xlsx) nebo CSV. Aplikace si ho trvale zapamatuje, dokud nenahrajete nový.",
+        "cfg_sec": "⚙️ Nastavení databáze zákazníků a e-mailu",
+        "cfg_info": "Nahrajte soubor Excel (.xlsx)/CSV a zadejte e-mail šéfa. Aplikace si vše trvale zapamatuje.",
         "upload_lbl": "Vyberte soubor (Excel nebo CSV):",
-        "db_loaded_ok": "✅ Adresář zákazníků je bezpečně uložen a připraven v mobilu.",
-        "db_change_btn": "🔄 Aktualizovat / Změnit soubor zákazníků",
+        "email_boss_lbl": "E-mailová adresa zaměstnavatele / šéfa (pro automatické odesílání):",
+        "db_loaded_ok": "✅ Adresář zákazníků i e-mail jsou bezpečně uloženy v mobilu.",
+        "db_change_btn": "🔄 Aktualizovat databázi / Změnit e-mail šéfa",
         "sec_1": "1. Datum, čas a trvání schůzky",
         "date_lbl": "Datum:",
         "time_lbl": "Čas návštěvy:",
@@ -75,11 +77,12 @@ LANG = {
     },
     "EN": {
         "title": "📱 RouteReport - Field Sales Assistant",
-        "cfg_sec": "⚙️ Customer Database Settings",
-        "cfg_info": "Upload any Excel (.xlsx) or CSV file. The app will remember it permanently until you upload a new one.",
+        "cfg_sec": "⚙️ Customer Database & Email Settings",
+        "cfg_info": "Upload an Excel (.xlsx)/CSV file and enter your boss's email. The app will remember it permanently.",
         "upload_lbl": "Select database file (Excel or CSV):",
-        "db_loaded_ok": "✅ Customer database is permanently saved and ready in your mobile.",
-        "db_change_btn": "🔄 Update / Change Customer File",
+        "email_boss_lbl": "Employer / Boss Email Address (for auto-sending):",
+        "db_loaded_ok": "✅ Customer database and email are permanently saved in your mobile.",
+        "db_change_btn": "🔄 Update Database / Change Boss Email",
         "sec_1": "1. Date, Time and Duration of the Meeting",
         "date_lbl": "Date:",
         "time_lbl": "Visit Time:",
@@ -114,7 +117,6 @@ LANG = {
         "out_remind": "📞 FOLLOW UP"
     }
 }
-# Funkce pro bleskové načtení a trvalé uložení adresáře do mezipaměti Streamlitu
 @st.cache_data
 def zpracuj_a_ulož_soubor(uploaded_file):
     if uploaded_file is None:
@@ -139,8 +141,7 @@ def zpracuj_a_ulož_soubor(uploaded_file):
 def nacti_trvale_ulozeny_adresar():
     if os.path.exists(ULOZENY_ADRESAR_FILE):
         try:
-            df = pd.read_csv(ULOZENY_ADRESAR_FILE, dtype=str)
-            return df
+            return pd.read_csv(ULOZENY_ADRESAR_FILE, dtype=str)
         except:
             pass
     return None
@@ -149,7 +150,6 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas, trvani, ozvat_se, slevy_data,
     t = LANG[jazyk]
     klient_vystup = " | ".join([str(x) for x in klient_radek[:4] if x])
     
-    # Sestavení klasického textového bloku pro e-mail/CRM
     blok_textu = (
         f"{oddelovac}\n"
         f"{t['out_date']}: {datum.strftime('%d.%m.%Y')} v {cas.strftime('%H:%M')}\n"
@@ -168,7 +168,6 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas, trvani, ozvat_se, slevy_data,
         with open(EXPORT_FILE, "a", encoding="utf-8") as f:
             f.write(blok_textu)
             
-        # Zároveň schůzku bezpečně uložíme do strukturované Excel tabulky historie pro pozdější stažení
         novy_radek = {
             "Datum": datum.strftime('%d.%m.%Y'),
             "Čas": cas.strftime('%H:%M'),
@@ -202,8 +201,13 @@ def vykresli_aplikaci():
         st.session_state["zmena_databaze"] = False
 
     df_klienti = nacti_trvale_ulozeny_adresar()
+    
+    # Načtení dříve uloženého e-mailu šéfa z paměti aplikace
+    email_sefa = st.sidebar.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", ""))
+    if email_sefa:
+        st.session_state["boss_email"] = email_sefa
 
-    # Pokud adresář už existuje, schováme nahrávací box, aby nezabíral místo
+    # Skrytí nahrávacího boxu po úspěšném prvním uložení
     if df_klienti is not None and not st.session_state["zmena_databaze"]:
         st.success(t["db_loaded_ok"])
         if st.button(t["db_change_btn"]):
@@ -212,6 +216,10 @@ def vykresli_aplikaci():
     else:
         with st.expander(t["cfg_sec"], expanded=True):
             st.write(t["cfg_info"])
+            email_sefa = st.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", ""))
+            if email_sefa:
+                st.session_state["boss_email"] = email_sefa
+                
             nahrany_soubor = st.file_uploader(t["upload_lbl"], type=["csv", "xlsx", "xls", "txt"])
             if nahrany_soubor is not None:
                 df_klienti = zpracuj_a_ulož_soubor(nahrany_soubor)
@@ -233,6 +241,7 @@ def vykresli_aplikaci():
     hledat = st.text_input(t["search_hint"], key="crm_hledat_input")
     
     vybrany_klient = None
+    klient_cisty_nazev = "Klient"
     if hledat:
         shoda = df_klienti.apply(lambda row: hledat.lower() in row.astype(str).str.lower().str.cat(sep=' '), axis=1)
         vysledky_hledani = df_klienti[shoda]
@@ -247,6 +256,7 @@ def vykresli_aplikaci():
             if box_vyber != t["select_prompt"]:
                 idx = seznam_moznosti.index(box_vyber) - 1
                 vybrany_klient = vysledky_hledani.iloc[idx].tolist()
+                klient_cisty_nazev = str(vybrany_klient[0]) if len(vybrany_klient) > 0 else "Klient"
                 st.success(f"{t['selected_ok']} {vybrany_klient}")
         else:
             st.error(t["no_client"])
@@ -280,6 +290,13 @@ def vykresli_aplikaci():
         txt_poznamka = st.text_area(t["note_lbl"], height=115)
 
     st.write("---")
+    
+    # Příprava stavu pro zobrazení tlačítek odeslání po uložení
+    if "posledni_report" not in st.session_state:
+        st.session_state["posledni_report"] = ""
+    if "posledni_klient" not in st.session_state:
+        st.session_state["posledni_klient"] = "Klient"
+
     if st.button(t["btn_save"], use_container_width=True):
         if not vybrany_klient:
             st.error("❌ Please select a client first / Nejdříve vyberte klienta!")
@@ -303,22 +320,44 @@ def vykresli_aplikaci():
             )
             
             if vystupni_blok:
+                st.session_state["posledni_report"] = vystupni_blok
+                st.session_state["posledni_klient"] = klient_cisty_nazev
                 st.success(t["save_success"])
-                st.subheader(t["copy_title"])
-                st.code(vystupni_blok)
                 st.rerun()
 
-    # Zobrazení přehledné historie zapsaných návštěv seřazených od nejnovější na konci stránky
+    # ✉️ 🟢 NOVINKA: Pokud je schůzka zapsaná, ukážeme velká mobilní tlačítka pro bleskové odeslání
+    if st.session_state["posledni_report"]:
+        st.subheader("✉️ Odeslat hotový report z mobilu:")
+        
+        # Bezpečné kódování textu do URL formátu pro telefonní aplikace
+        text_pro_url = urllib.parse.quote(st.session_state["posledni_report"])
+        predmet_pro_url = urllib.parse.quote(f"RouteReport: {st.session_state['posledni_klient']}")
+        boss_email_adr = st.session_state.get("boss_email", "")
+        
+        col_send1, col_send2 = st.columns(2)
+        with col_send1:
+            # Tlačítko na E-mail: Otevře výchozí mailovou aplikaci telefonu (předvyplní šéfa, předmět i text)
+            mail_odkaz = f"mailto:{boss_email_adr}?subject={predmet_pro_url}&body={text_pro_url}"
+            st.markdown(f'<a href="{mail_odkaz}" target="_blank" style="text-decoration:none;"><button style="width:100%; height:45px; background-color:#4CAF50; color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">✉️ ODESLAT E-MAILEM</button></a>', unsafe_allow_width=True, unsafe_allow_html=True)
+            
+        with col_send2:
+            # Tlačítko na WhatsApp: Otevře WhatsApp v mobilu a rovnou do chatu připraví zformátovaný text schůzky
+            wa_odkaz = f"https://whatsapp.com{text_pro_url}"
+            st.markdown(f'<a href="{wa_odkaz}" target="_blank" style="text-decoration:none;"><button style="width:100%; height:45px; background-color:#00E676; color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">💬 POSLAT PŘES WHATSAPP</button></a>', unsafe_allow_width=True, unsafe_allow_html=True)
+
+        st.subheader(t["copy_title"])
+        st.code(st.session_state["posledni_report"])
+
+    # Přehled historie schůzek a stahování Excelu na konci stránky
     st.write("---")
     st.subheader("📋 Přehled zapsaných schůzek")
     
     if os.path.exists(HISTORIE_SOUBOR):
         try:
             df_hist = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
-            df_zobrazeni = df_hist.iloc[::-1] # Obrátíme pořadí řádků (nejnovější nahoře)
+            df_zobrazeni = df_hist.iloc[::-1]
             st.dataframe(df_zobrazeni, use_container_width=True, hide_index=True)
             
-            # Vygenerování Excelu ke stažení přímo na mobilu nebo PC
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                 df_hist.to_excel(writer, index=False, sheet_name='Schůzky')
