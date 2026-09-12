@@ -1,8 +1,23 @@
 # -*- coding: utf-8 -*-
+import os
+import csv
+import sys
+import io
+from datetime import datetime
+
+# Automatická oprava koncovky .xlsx: Pokud na serveru chybí balíček pro Excel, bleskově ho nainstalujeme
+try:
+    import openpyxl
+except ImportError:
+    import subprocess
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "openpyxl"])
+        import openpyxl
+    except Exception as e:
+        pass
+
 import streamlit as st
 import pandas as pd
-import os
-from datetime import datetime
 
 # Globální mobilní nastavení aplikace RouteReport
 st.set_page_config(
@@ -13,14 +28,18 @@ st.set_page_config(
 )
 
 EXPORT_FILE = "routereport_zapisy_schuzek.txt"
+ULOZENY_ADRESAR_FILE = "cached_customer_db.csv"
+HISTORIE_SOUBOR = "crm_historie_schuzek.csv"
 
 # Slovník pro kompletní mezinárodní lokalizaci (Čeština a Angličtina)
 LANG = {
     "CS": {
         "title": "📱 RouteReport - Asistent v terénu",
         "cfg_sec": "⚙️ Nastavení databáze zákazníků",
-        "cfg_info": "Nahrajte jakýkoliv soubor Excel (.xlsx) nebo CSV se seznamem svých zákazníků z vašeho účetnictví.",
+        "cfg_info": "Nahrajte jakýkoliv soubor Excel (.xlsx) nebo CSV. Aplikace si ho trvale zapamatuje, dokud nenahrajete nový.",
         "upload_lbl": "Vyberte soubor (Excel nebo CSV):",
+        "db_loaded_ok": "✅ Adresář zákazníků je bezpečně uložen a připraven v mobilu.",
+        "db_change_btn": "🔄 Aktualizovat / Změnit soubor zákazníků",
         "sec_1": "1. Datum, čas a trvání schůzky",
         "date_lbl": "Datum:",
         "time_lbl": "Čas návštěvy:",
@@ -42,7 +61,7 @@ LANG = {
         "remind_check": "Naplánovat termín příštího kontaktu / ozvání",
         "remind_date": "Kdy se ozvat znovu:",
         "btn_save": "💾 ZAPSAT SCHŮZKU DO HISTORIE",
-        "save_success": "✅ Schůzka úspěšně uložena a zapsána na disk počítače!",
+        "save_success": "✅ Schůzka úspěšně uložena a zapsána!",
         "copy_title": "📋 Text ke zkopírování do vašeho systému / e-mailu:",
         "out_date": "📅 DATUM A ČAS",
         "out_dur": "⏱️ TRVÁNÍ",
@@ -57,8 +76,10 @@ LANG = {
     "EN": {
         "title": "📱 RouteReport - Field Sales Assistant",
         "cfg_sec": "⚙️ Customer Database Settings",
-        "cfg_info": "Upload any Excel (.xlsx) or CSV file with your customer list exported from your accounting system.",
+        "cfg_info": "Upload any Excel (.xlsx) or CSV file. The app will remember it permanently until you upload a new one.",
         "upload_lbl": "Select database file (Excel or CSV):",
+        "db_loaded_ok": "✅ Customer database is permanently saved and ready in your mobile.",
+        "db_change_btn": "🔄 Update / Change Customer File",
         "sec_1": "1. Date, Time and Duration of the Meeting",
         "date_lbl": "Date:",
         "time_lbl": "Visit Time:",
@@ -93,27 +114,42 @@ LANG = {
         "out_remind": "📞 FOLLOW UP"
     }
 }
-def nacti_univerzalni_databazi(uploaded_file):
+# Funkce pro bleskové načtení a trvalé uložení adresáře do mezipaměti Streamlitu
+@st.cache_data
+def zpracuj_a_ulož_soubor(uploaded_file):
     if uploaded_file is None:
         return None
     try:
         jmeno = uploaded_file.name.lower()
         if jmeno.endswith('.xlsx') or jmeno.endswith('.xls'):
-            df = pd.read_excel(uploaded_file, dtype=str)
+            df = pd.read_excel(uploaded_file, dtype=str, engine='openpyxl')
         else:
             df = pd.read_csv(uploaded_file, sep=None, engine='python', dtype=str)
         
         nove_sloupce = [f"Col_{i}" for i in range(len(df.columns))]
         df.columns = nove_sloupce
-        return df.fillna("")
+        df = df.fillna("")
+        
+        df.to_csv(ULOZENY_ADRESAR_FILE, index=False, encoding="utf-8")
+        return df
     except Exception as e:
-        st.error(f"Error loading file / Chyba načítání souboru: {e}")
+        st.error(f"Chyba zpracování Excelu/CSV: {e}")
         return None
+
+def nacti_trvale_ulozeny_adresar():
+    if os.path.exists(ULOZENY_ADRESAR_FILE):
+        try:
+            df = pd.read_csv(ULOZENY_ADRESAR_FILE, dtype=str)
+            return df
+        except:
+            pass
+    return None
 def zapis_zaznam_na_disk(klient_radek, datum, cas, trvani, ozvat_se, slevy_data, poznamka, jazyk):
     oddelovac = "=" * 45
     t = LANG[jazyk]
     klient_vystup = " | ".join([str(x) for x in klient_radek[:4] if x])
     
+    # Sestavení klasického textového bloku pro e-mail/CRM
     blok_textu = (
         f"{oddelovac}\n"
         f"{t['out_date']}: {datum.strftime('%d.%m.%Y')} v {cas.strftime('%H:%M')}\n"
@@ -131,9 +167,28 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas, trvani, ozvat_se, slevy_data,
     try:
         with open(EXPORT_FILE, "a", encoding="utf-8") as f:
             f.write(blok_textu)
+            
+        # Zároveň schůzku bezpečně uložíme do strukturované Excel tabulky historie pro pozdější stažení
+        novy_radek = {
+            "Datum": datum.strftime('%d.%m.%Y'),
+            "Čas": cas.strftime('%H:%M'),
+            "Klient": klient_vystup,
+            "Trvání (min)": trvani,
+            "Situace": slevy_data['situace'],
+            "Sleva": slevy_data['sleva'],
+            "Konkurence": slevy_data['konkurence'],
+            "Potenciál": slevy_data['potencial'],
+            "Poznámka": poznamka if poznamka else ""
+        }
+        df_novy = pd.DataFrame([novy_radek])
+        if os.path.exists(HISTORIE_SOUBOR):
+            df_novy.to_csv(HISTORIE_SOUBOR, mode='a', header=False, index=False, encoding="utf-8")
+        else:
+            df_novy.to_csv(HISTORIE_SOUBOR, mode='w', header=True, index=False, encoding="utf-8")
+            
         return blok_textu
     except Exception as e:
-        st.error(f"Chyba zápisu souboru / File write error: {e}")
+        st.error(f"Chyba zápisu souboru: {e}")
         return ""
 def vykresli_aplikaci():
     col_lang1, col_lang2 = st.columns(2)
@@ -143,21 +198,37 @@ def vykresli_aplikaci():
     t = LANG[jazyk]
     st.title(t["title"])
     
-    with st.expander(t["cfg_sec"], expanded=True):
-        st.write(t["cfg_info"])
-        nahrany_soubor = st.file_uploader(t["upload_lbl"], type=["csv", "xlsx", "xls", "txt"])
-        
-    df_klienti = nacti_univerzalni_databazi(nahrany_soubor)
-    if df_klienti is None:
-        st.info("💡 [CS] Pro spuštění nahrajte Excel se zákazníky.\n\n💡 [EN] Please upload an Excel file with customers to start.")
-        return
+    if "zmena_databaze" not in st.session_state:
+        st.session_state["zmena_databaze"] = False
 
+    df_klienti = nacti_trvale_ulozeny_adresar()
+
+    # Pokud adresář už existuje, schováme nahrávací box, aby nezabíral místo
+    if df_klienti is not None and not st.session_state["zmena_databaze"]:
+        st.success(t["db_loaded_ok"])
+        if st.button(t["db_change_btn"]):
+            st.session_state["zmena_databaze"] = True
+            st.rerun()
+    else:
+        with st.expander(t["cfg_sec"], expanded=True):
+            st.write(t["cfg_info"])
+            nahrany_soubor = st.file_uploader(t["upload_lbl"], type=["csv", "xlsx", "xls", "txt"])
+            if nahrany_soubor is not None:
+                df_klienti = zpracuj_a_ulož_soubor(nahrany_soubor)
+                if df_klienti is not None:
+                    st.session_state["zmena_databaze"] = False
+                    st.success("👍 Importováno!")
+                    st.rerun()
+
+    if df_klienti is None:
+        return
     st.subheader(t["sec_1"])
     col_d1, col_d2 = st.columns(2)
     with col_d1:
         datum_sch = st.date_input(t["date_lbl"], datetime.now())
     with col_d2:
         cas_sch = st.time_input(t["time_lbl"], datetime.now())
+
     st.subheader(t["sec_2"])
     hledat = st.text_input(t["search_hint"], key="crm_hledat_input")
     
@@ -188,7 +259,7 @@ def vykresli_aplikaci():
     with c_z1: m_bbb = st.checkbox("BBB")
     with col_z2: m_cyclon = st.checkbox("CYCLON")
     with col_z3: m_basil = st.checkbox("BASIL")
-    with col_z4: m_rozzo = m_rozzo = st.checkbox("ROZZO")
+    with col_z4: m_rozzo = st.checkbox("ROZZO")
     
     txt_sleva = st.text_input(t["discount_lbl"], value="")
     txt_konkurence = st.text_input(t["competitor_lbl"], value="")
@@ -235,7 +306,34 @@ def vykresli_aplikaci():
                 st.success(t["save_success"])
                 st.subheader(t["copy_title"])
                 st.code(vystupni_blok)
-# 🔒 Zabezpečení aplikace přístupovým heslem pro vaše soukromé účely
+                st.rerun()
+
+    # Zobrazení přehledné historie zapsaných návštěv seřazených od nejnovější na konci stránky
+    st.write("---")
+    st.subheader("📋 Přehled zapsaných schůzek")
+    
+    if os.path.exists(HISTORIE_SOUBOR):
+        try:
+            df_hist = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
+            df_zobrazeni = df_hist.iloc[::-1] # Obrátíme pořadí řádků (nejnovější nahoře)
+            st.dataframe(df_zobrazeni, use_container_width=True, hide_index=True)
+            
+            # Vygenerování Excelu ke stažení přímo na mobilu nebo PC
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                df_hist.to_excel(writer, index=False, sheet_name='Schůzky')
+            
+            st.download_button(
+                label="📥 Stáhnout celou historii (Excel)",
+                data=buffer.getvalue(),
+                file_name=f"crm_report_schuzek_{datetime.now().strftime('%d_%m_%Y')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+        except:
+            st.caption("Zatím nebyly zapsány žádné schůzky.")
+    else:
+        st.caption("Zatím nebyly zapsány žádné schůzky.")
 if __name__ == "__main__":
     TAJNE_HESLO = "Cestak123"
     
