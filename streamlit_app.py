@@ -98,14 +98,11 @@ def nacti_univerzalni_databazi(uploaded_file):
         return None
     try:
         jmeno = uploaded_file.name.lower()
-        # Rozpoznání formátu souboru a bleskové načtení do paměti aplikace
         if jmeno.endswith('.xlsx') or jmeno.endswith('.xls'):
             df = pd.read_excel(uploaded_file, dtype=str)
         else:
-            # Automatická detekce oddělovače (středník, čárka) pro CSV
             df = pd.read_csv(uploaded_file, sep=None, engine='python', dtype=str)
         
-        # Přejmenování prvních 4 sloupců pro vnitřní logiku, zbytek necháme
         nove_sloupce = [f"Col_{i}" for i in range(len(df.columns))]
         df.columns = nove_sloupce
         return df.fillna("")
@@ -115,14 +112,12 @@ def nacti_univerzalni_databazi(uploaded_file):
 def zapis_zaznam_na_disk(klient_radek, datum, cas, trvani, ozvat_se, slevy_data, poznamka, jazyk):
     oddelovac = "=" * 45
     t = LANG[jazyk]
-    
-    # Sestavení informací o vybraném klientovi z prvních 4 sloupců Excelu
     klient_vystup = " | ".join([str(x) for x in klient_radek[:4] if x])
     
     blok_textu = (
         f"{oddelovac}\n"
         f"{t['out_date']}: {datum.strftime('%d.%m.%Y')} v {cas.strftime('%H:%M')}\n"
-        f"{t['out_dur']}:      {trvani} {jazyk.lower()} \n"
+        f"{t['out_dur']}:      {trvani} min \n"
         f"{t['out_client']}:      {klient_vystup}\n"
         f"{t['out_sit']}:     {slevy_data['situace']}\n"
         f"{t['out_disc']}:       {slevy_data['sleva']}\n"
@@ -141,15 +136,13 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas, trvani, ozvat_se, slevy_data,
         st.error(f"Chyba zápisu souboru / File write error: {e}")
         return ""
 def vykresli_aplikaci():
-    # 🟢 KROK 1: Globální přepínač jazyků přímo na mobilní liště
-    col_lang1, col_lang2 = st.columns([3, 1])
+    col_lang1, col_lang2 = st.columns(2)
     with col_lang2:
         jazyk = st.selectbox("🌐 Language", ["CS", "EN"], index=0)
         
     t = LANG[jazyk]
     st.title(t["title"])
     
-    # Rámeček pro nahrání zákaznického Excelu odkudkoliv ze světa
     with st.expander(t["cfg_sec"], expanded=True):
         st.write(t["cfg_info"])
         nahrany_soubor = st.file_uploader(t["upload_lbl"], type=["csv", "xlsx", "xls", "txt"])
@@ -158,38 +151,34 @@ def vykresli_aplikaci():
     if df_klienti is None:
         st.info("💡 [CS] Pro spuštění nahrajte Excel se zákazníky.\n\n💡 [EN] Please upload an Excel file with customers to start.")
         return
-    # 1. SEKCE: Termíny schůzky
+
     st.subheader(t["sec_1"])
     col_d1, col_d2 = st.columns(2)
     with col_d1:
         datum_sch = st.date_input(t["date_lbl"], datetime.now())
     with col_d2:
         cas_sch = st.time_input(t["time_lbl"], datetime.now())
-
-    # 2. SEKCE: Chytré mobilní vyhledávání klienta
     st.subheader(t["sec_2"])
     hledat = st.text_input(t["search_hint"], key="crm_hledat_input")
     
     vybrany_klient = None
     if hledat:
-        # Fulltextový filtr: Hledá shodu napříč všemi sloupci nahranné tabulky
         shoda = df_klienti.apply(lambda row: hledat.lower() in row.astype(str).str.lower().str.cat(sep=' '), axis=1)
         vysledky_hledani = df_klienti[shoda]
         
         if not vysledky_hledani.empty:
-            seznam_možností = [t["select_prompt"]] + [
+            seznam_moznosti = [t["select_prompt"]] + [
                 " | ".join([str(row.iloc[i]) for i in range(min(len(row), 4)) if row.iloc[i]])
                 for _, row in vysledky_hledani.head(15).iterrows()
             ]
-            box_vyber = st.selectbox("🔍 Results / Výsledky:", seznam_možností)
+            box_vyber = st.selectbox("🔍 Results / Výsledky:", seznam_moznosti)
             
             if box_vyber != t["select_prompt"]:
-                idx = seznam_možností.index(box_vyber) - 1
+                idx = seznam_moznosti.index(box_vyber) - 1
                 vybrany_klient = vysledky_hledani.iloc[idx].tolist()
-                st.success(f"{t['selected_ok']} {vybrany_klient[0]}")
+                st.success(f"{t['selected_ok']} {vybrany_klient}")
         else:
             st.error(t["no_client"])
-    # 3. SEKCE: Zaškrtávátka a textové parametry slev
     st.subheader(t["sec_3"])
     ch_b2b = st.checkbox(t["b2b_lbl"])
     ch_zajem = st.checkbox(t["no_interest"])
@@ -199,37 +188,31 @@ def vykresli_aplikaci():
     with c_z1: m_bbb = st.checkbox("BBB")
     with col_z2: m_cyclon = st.checkbox("CYCLON")
     with col_z3: m_basil = st.checkbox("BASIL")
-    with col_z4: m_rozzo = st.checkbox("ROZZO")
+    with col_z4: m_rozzo = m_rozzo = st.checkbox("ROZZO")
     
     txt_sleva = st.text_input(t["discount_lbl"], value="")
     txt_konkurence = st.text_input(t["competitor_lbl"], value="")
     txt_potencial = st.text_input(t["potential_lbl"], value="")
-    # 4. SEKCE: Průběh jednání zarovnaný VEDLE SEBE pro úsporu výšky mobilní obrazovky
+
     st.subheader(t["sec_4"])
-    
-    # Hlavní vodorovný kontejner pro Trvání a Textové pole
-    row_jednani_frame = st.container()
-    col_t1, col_t2 = st.columns([1, 2])
+    obsah_row_frame = st.container()
+    col_t1, col_t2 = st.columns(2)
     
     with col_t1:
-        # Mobilní trvání schůzky
         skoky_trvani = [str(i) for i in range(5, 125, 5)]
         txt_trvani = st.selectbox(t["duration_lbl"], skoky_trvani, index=5)
-        
-        st.write("") # Optická mezera
+        st.write("") 
         ch_ozvat = st.checkbox(t["remind_check"])
         dt_ozvat = st.date_input(t["remind_date"], datetime.now()) if ch_ozvat else None
         
     with col_t2:
-        # Velké textové pole pro poznámky z terénu
         txt_poznamka = st.text_area(t["note_lbl"], height=115)
+
     st.write("---")
-    # Velké dotykové tlačítko přes celou šířku mobilu
     if st.button(t["btn_save"], use_container_width=True):
         if not vybrany_klient:
             st.error("❌ Please select a client first / Nejdříve vyberte klienta!")
         else:
-            # Sestavení textového řetězce situací z terénu
             sit_seznam = []
             if ch_b2b: sit_seznam.append("Bude zaslán přístup na B2B")
             if ch_zajem: sit_seznam.append("Nemá zájem - bere od jiných")
@@ -244,7 +227,6 @@ def vykresli_aplikaci():
                 "potencial": f"{txt_potencial} %" if txt_potencial else "Nezadáno"
             }
             
-            # Volání ukládací funkce z Části 3
             vystupni_blok = zapis_zaznam_na_disk(
                 vybrany_klient, datum_sch, cas_sch, txt_trvani, dt_ozvat, slevy_objekt, txt_poznamka, jazyk
             )
@@ -253,6 +235,22 @@ def vykresli_aplikaci():
                 st.success(t["save_success"])
                 st.subheader(t["copy_title"])
                 st.code(vystupni_blok)
-
+# 🔒 Zabezpečení aplikace přístupovým heslem pro vaše soukromé účely
 if __name__ == "__main__":
-    vykresli_aplikaci()
+    TAJNE_HESLO = "Cestak123"
+    
+    if "prihlasen" not in st.session_state:
+        st.session_state["prihlasen"] = False
+        
+    if not st.session_state["prihlasen"]:
+        st.subheader("🔒 RouteReport - Soukromý přístup")
+        vstoupit_heslo = st.text_input("Zadejte přístupové heslo:", type="password")
+        
+        if st.button("Vstoupit do aplikace", use_container_width=True):
+            if vstoupit_heslo == TAJNE_HESLO:
+                st.session_state["prihlasen"] = True
+                st.rerun()
+            else:
+                st.error("❌ Nesprávné heslo! Přístup odepřen.")
+    else:
+        vykresli_aplikaci()
