@@ -22,8 +22,7 @@ EXPORT_FILE = "routereport_zapisy_schuzek.txt"
 ULOZENY_ADRESAR_FILE = "cached_customer_db.csv"
 HISTORIE_SOUBOR = "crm_historie_schuzek.csv"
 UKOLY_SOUBOR = "crm_ukoly_kalendar.csv"
-
-# Slovník pro kompletní mezinárodní lokalizaci (Čeština a Angličtina)
+# Slovník upravený pro lidské poznámky z návštěv v terénu (Čeština)
 LANG = {
     "CS": {
         "title": "📱 RouteReport - Poznámky z terénu",
@@ -35,7 +34,7 @@ LANG = {
         "db_change_btn": "🔄 Aktualizovat databázi / Změnit e-mail šéfa",
         "sec_1": "1. Datum, čas a trvání návštěvy",
         "date_lbl": "Datum:",
-        "time_lbl": "Čas návštěvy:",
+        "time_lbl": "Čas návštěvy (Hodina / Minuta):",
         "duration_lbl": "Trvání návštěvy:",
         "sec_2": "2. Vyhledat a vybrat klienta",
         "search_hint": "Ťukněte a začněte psát jméno nebo město...",
@@ -76,7 +75,7 @@ LANG = {
         "db_change_btn": "🔄 Update Database / Change Email",
         "sec_1": "1. Date, Time and Duration of the Visit",
         "date_lbl": "Date:",
-        "time_lbl": "Visit Time:",
+        "time_lbl": "Visit Time (Hour / Minute):",
         "duration_lbl": "Visit Duration:",
         "sec_2": "2. Search and Select Client",
         "search_hint": "Tap and start typing name or city...",
@@ -92,7 +91,7 @@ LANG = {
         "potential_lbl": "Store purchase potential (%):",
         "sec_4": "4. Visit Minutes and Notes",
         "note_lbl": "Write visit notes or summary:",
-        "remind_check": "🔔 Schedule follow-up / Next contact (Reminder)",
+        "remind_check": "Schedule follow-up / Next contact (Reminder)",
         "remind_date": "When to call again:",
         "btn_save": "💾 SAVE VISIT INFO",
         "save_success": "✅ Visit info successfully saved to log on background!",
@@ -112,31 +111,6 @@ def odstran_diakritiku(text):
     if not isinstance(text, str):
         text = str(text)
     return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
-
-# 🟢 NOVINKA: Generátor standardního kalendářního souboru (.ics), který otevře Apple/Google/Outlook kalendář v mobilu
-def vygeneruj_ics_soubor(datum_ukolu, klient_jmeno, duvod):
-    datum_str = datum_ukolu.replace(".", "") # Převod z DDMMYYYY
-    try:
-        dt = datetime.strptime(datum_ukolu, "%d.%m.%Y")
-        ics_format_date = dt.strftime("%Y%m%d")
-    except:
-        ics_format_date = datetime.now().strftime("%Y%m%d")
-        
-    cisty_duvod = duvod.replace("\n", " ")
-    ics_content = (
-        "BEGIN:VCALENDAR\n"
-        "VERSION:2.0\n"
-        "PRODID:-//RouteReport//Tasks//EN\n"
-        "BEGIN:VEVENT\n"
-        f"DTSTART;VALUE=DATE:{ics_format_date}\n"
-        f"DTEND;VALUE=DATE:{ics_format_date}\n"
-        f"SUMMARY:📞 Ozvat se: {klient_jmeno}\n"
-        f"DESCRIPTION:Důvod kontaktu: {cisty_duvod}\n"
-        "PRIORITY:5\n"
-        "END:VEVENT\n"
-        "END:VCALENDAR"
-    )
-    return ics_content
 
 @st.cache_data
 def zpracuj_a_ulož_soubor(uploaded_file):
@@ -160,15 +134,15 @@ def nacti_trvale_ulozeny_adresar():
         except:
             pass
     return None
-def zapis_zaznam_na_disk(klient_radek, datum, cas, trvani, ozvat_se, slevy_data, poznamka, jazyk):
+def zapis_zaznam_na_disk(klient_radek, datum, cas_text, trvani, ozvat_se, slevy_data, poznamka, jazyk):
     oddelovac = "=" * 45
     t = LANG[jazyk]
     klient_vystup = " | ".join([str(x) for x in klient_radek[:4] if x])
-    klient_kratky = str(klient_radek[0]) if len(klient_radek) > 0 else "Klient"
+    klient_kratky = str(klient_radek) if len(klient_radek) > 0 else "Klient"
     
     blok_textu = (
         f"{oddelovac}\n"
-        f"{t['out_date']}: {datum.strftime('%d.%m.%Y')} v {cas.strftime('%H:%M')}\n"
+        f"{t['out_date']}: {datum.strftime('%d.%m.%Y')} v {cas_text}\n"
         f"{t['out_dur']}:      {trvani} min \n"
         f"{t['out_client']}:      {klient_vystup}\n"
         f"{t['out_sit']}:     {slevy_data['situace']}\n"
@@ -186,7 +160,7 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas, trvani, ozvat_se, slevy_data,
             
         novy_radek = {
             "Datum": datum.strftime('%d.%m.%Y'),
-            "Čas": cas.strftime('%H:%M'),
+            "Čas": cas_text,
             "Klient": klient_vystup,
             "Trvání (min)": trvani,
             "Situace": slevy_data['situace'],
@@ -202,9 +176,8 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas, trvani, ozvat_se, slevy_data,
         else:
             df_novy.to_csv(HISTORIE_SOUBOR, mode='w', header=True, index=False, encoding="utf-8")
             
-        # 🟢 AUTOMATICKÝ ÚKOLOVNÍK: Pokud uživatel vybral datum připomínky, zapíšeme úkol do kalendáře
         if ozvat_se:
-            duvod_kontaktu = f"Slevy: {slevy_data['sleva']}. Poznámka: {poznamka if poznamka else 'Zkontrolovat stav prodejny.'}"
+            duvod_kontaktu = f"Slevy: {slevy_data['sleva']}. Poznamka: {poznamka if poznamka else 'Kontrola prodejny.'}"
             novy_ukol = {
                 "Termín": ozvat_se.strftime('%d.%m.%Y'),
                 "Klient": klient_kratky,
@@ -259,13 +232,21 @@ def vykresli_aplikaci():
 
     if df_klienti is None:
         return
+    # Sekce 1: Datum a volba času přesně jako na počítačové verzi (rozevírací boxy vedle sebe)
     st.subheader(t["sec_1"])
-    col_d1, col_d2 = st.columns(2)
+    col_d1, col_t_h, col_t_m = st.columns(3)
     with col_d1:
         datum_sch = st.date_input(t["date_lbl"], datetime.now())
-    with col_d2:
-        cas_sch = st.time_input(t["time_lbl"], datetime.now())
+    with col_t_h:
+        hodiny_list = [f"{i:02d}" for i in range(24)]
+        zvolena_hodina = st.selectbox("Hodina:", hodiny_list, index=15)
+    with col_t_m:
+        minuty_list = [f"{i:02d}" for i in range(0, 60, 5)]
+        zvolen_minuta = st.selectbox("Minuta:", minuty_list, index=10)
+        
+    cas_vystup_text = f"{zvolena_hodina}:{zvolen_minuta}"
 
+    # Sekce 2: Hledání a výběr klienta
     st.subheader(t["sec_2"])
     
     seznam_zakazniku = []
@@ -290,6 +271,7 @@ def vykresli_aplikaci():
         vybrany_klient = mapovani_zaznamu[vybrany_box_text]
         klient_cisty_nazev = vybrany_box_text
         st.success(f"{t['selected_ok']} {vybrany_box_text}")
+    # Sekce 3: Situace a dynamické značky
     st.subheader(t["sec_3"])
     ch_b2b = st.checkbox(t["b2b_lbl"])
     ch_zajem = st.checkbox(t["no_interest"])
@@ -317,7 +299,6 @@ def vykresli_aplikaci():
     txt_potencial = st.text_input(t["potential_lbl"], value="")
 
     st.subheader(t["sec_4"])
-    obsah_row_frame = st.container()
     col_t1, col_t2 = st.columns(2)
     
     with col_t1:
@@ -351,19 +332,18 @@ def vykresli_aplikaci():
             sleva_string = ", ".join(slevy_vystup_list) if slevy_vystup_list else "Není"
             
             slevy_objekt = {
-                "situace": ", ".join(sit_seznam) if sit_seznam else "Žádná specifická situation",
+                "situace": ", ".join(sit_seznam) if sit_seznam else "Žádná specifická situace",
                 "sleva": sleva_string,
                 "konkurence": txt_konkurence if txt_konkurence else "Nezadáno",
                 "potencial": f"{txt_potencial} %" if txt_potencial else "Nezadáno"
             }
             
             vystupni_blok = zapis_zaznam_na_disk(
-                vybrany_klient, datum_sch, cas_sch, txt_trvani, dt_ozvat, slevy_objekt, txt_poznamka, jazyk
+                vybrany_klient, datum_sch, cas_vystup_text, txt_trvani, dt_ozvat, slevy_objekt, txt_poznamka, jazyk
             )
             if vystupni_blok:
                 st.success(t["save_success"])
                 st.rerun()
-
     st.write("---")
     hist_title = "📋 Deník mých návštěv" if jazyk == "CS" else "📋 My Visit Log"
     st.subheader(hist_title)
@@ -400,7 +380,7 @@ def vykresli_aplikaci():
                 mail_odkaz = f"mailto:{boss_email_adr}?subject={predmet_pro_url}&body={text_pro_url}"
                 st.markdown(f'<a href="{mail_odkaz}" target="_blank" style="text-decoration:none;"><button style="width:100%; height:52px; background-color:#1E88E5; color:white; border:none; border-radius:5px; font-weight:bold; font-size:14px; cursor:pointer;">{btn_label}</button></a>', unsafe_allow_html=True)
             
-            # 📅 NOVINKA: PŘEHLEDNÁ TABULKA NADCHÁZEJÍCÍCH ÚKOLŮ S EXPORTEM DO MOBILNÍHO KALENDÁŘE
+            # Kalendářní úkoly otevírající přímý internetový odkaz v telefonu
             st.write("---")
             tasks_title = "📅 Moje nadcházející úkoly (Připomínky)" if jazyk == "CS" else "📅 My Upcoming Tasks (Reminders)"
             st.subheader(tasks_title)
@@ -410,17 +390,19 @@ def vykresli_aplikaci():
                 if not df_ukoly.empty:
                     st.dataframe(df_ukoly, use_container_width=True, hide_index=True)
                     
-                    # Generování tlačítek pro stažení úkolu do Apple/Google kalendáře přímo v mobilu
-                    st.caption("Kliknutím stáhnete úkol jako připomínku přímo do kalendáře ve vašem mobilu:")
+                    st.caption("Kliknutím bleskově uložíte připomínku do kalendáře v mobilu (vše se předvyplní samo):")
                     for idx, row_u in df_ukoly.iterrows():
-                        ics_data = vygeneruj_ics_soubor(row_u["Termín"], row_u["Klient"], row_u["Důvod (Kvůli čemu)"])
-                        st.download_button(
-                            label=f"📅 Přidat do kalendáře: {row_u['Klient']} ({row_u['Termín']})",
-                            data=ics_data,
-                            file_name=f"task_{row_u['Klient']}_{row_u['Termín']}.ics",
-                            mime="text/calendar",
-                            key=f"ics_btn_{idx}"
-                        )
+                        try:
+                            d_obj = datetime.strptime(row_u["Termín"], "%d.%m.%Y")
+                            g_date = d_obj.strftime("%Y%m%d")
+                        except:
+                            g_date = datetime.now().strftime("%Y%m%d")
+                            
+                        g_title = urllib.parse.quote(f"📞 Ozvat se: {row_u['Klient']}")
+                        g_desc = urllib.parse.quote(row_u["Důvod (Kvůli čemu)"])
+                        
+                        google_cal_link = f"https://google.com{g_title}&dates={g_date}/{g_date}&details={g_desc}"
+                        st.markdown(f'<a href="{google_cal_link}" target="_blank" style="text-decoration:none;"><button style="width:100%; height:40px; background-color:#34A853; color:white; border:none; border-radius:5px; font-weight:bold; margin-bottom:5px; cursor:pointer;">📅 Přidat do kalendáře: {row_u["Klient"]}</button></a>', unsafe_allow_html=True)
                 else:
                     st.caption("Žádné naplánované připomínky.")
             else:
