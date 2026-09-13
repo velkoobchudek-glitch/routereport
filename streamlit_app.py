@@ -27,8 +27,8 @@ LANG = {
     "CS": {
         "title": "📱 RouteReport - Asistent v terénu",
         "cfg_sec": "⚙️ Nastavení databáze zákazníků a e-mailu",
-        "cfg_info": "Nahrajte soubor Excel (.xlsx)/CSV a zadejte e-mail šéfa. Aplikace si vše trvale zapamatuje.",
-        "upload_lbl": "Vyberte soubor (Excel nebo CSV):",
+        "cfg_info": "Nahrajte soubor CSV se zákazníky a zadejte e-mail šéfa. Aplikace si vše trvale zapamatuje.",
+        "upload_lbl": "Vyberte soubor (pouze CSV):",
         "email_boss_lbl": "E-mailová adresa zaměstnavatele / šéfa (pro automatické odesílání):",
         "db_loaded_ok": "✅ Adresář zákazníků i e-mail jsou bezpečně uloženy v mobilu.",
         "db_change_btn": "🔄 Aktualizovat databázi / Změnit e-mail šéfa",
@@ -37,8 +37,8 @@ LANG = {
         "time_lbl": "Čas návštěvy:",
         "duration_lbl": "Trvání schůzky:",
         "sec_2": "2. Vyhledat a vybrat klienta",
-        "search_hint": "Zadejte jméno klienta nebo město (bez háčků a čárek)...",
-        "select_prompt": "-- Klikněte pro výběr klienta --",
+        "search_hint": "Ťukněte a začněte psát jméno nebo město...",
+        "select_prompt": "-- Začněte psát jméno nebo město klienta --",
         "selected_ok": "🤝 Vybráno pro zápis:",
         "no_client": "❌ Žádný klient neodpovídá zadání.",
         "sec_3": "3. Situace z terénu a slevy",
@@ -68,8 +68,8 @@ LANG = {
     "EN": {
         "title": "📱 RouteReport - Field Sales Assistant",
         "cfg_sec": "⚙️ Customer Database & Email Settings",
-        "cfg_info": "Upload an Excel (.xlsx)/CSV file and enter your boss's email. The app will remember it permanently.",
-        "upload_lbl": "Select database file (Excel or CSV):",
+        "cfg_info": "Upload a CSV file and enter your boss's email. The app will remember it permanently.",
+        "upload_lbl": "Select database file (CSV only):",
         "email_boss_lbl": "Employer / Boss Email Address (for auto-sending):",
         "db_loaded_ok": "✅ Customer database and email are permanently saved in your mobile.",
         "db_change_btn": "🔄 Update Database / Change Boss Email",
@@ -78,8 +78,8 @@ LANG = {
         "time_lbl": "Visit Time:",
         "duration_lbl": "Meeting Duration:",
         "sec_2": "2. Search and Select Client",
-        "search_hint": "Type client name or city (accents ignored)...",
-        "select_prompt": "-- Click to select a client --",
+        "search_hint": "Tap and start typing name or city...",
+        "select_prompt": "-- Start typing client name or city --",
         "selected_ok": "🤝 Selected for report:",
         "no_client": "❌ No client matches your search.",
         "sec_3": "3. Field Situations and Discounts",
@@ -117,11 +117,8 @@ def zpracuj_a_ulož_soubor(uploaded_file):
     if uploaded_file is None:
         return None
     try:
-        jmeno = uploaded_file.name.lower()
-        if jmeno.endswith('.xlsx') or jmeno.endswith('.xls'):
-            df = pd.read_excel(uploaded_file, dtype=str, engine='openpyxl')
-        else:
-            df = pd.read_csv(uploaded_file, sep=None, engine='python', dtype=str)
+        # Čteme čisté a bleskové CSV soubory
+        df = pd.read_csv(uploaded_file, sep=None, engine='python', dtype=str)
         
         nove_sloupce = [f"Col_{i}" for i in range(len(df.columns))]
         df.columns = nove_sloupce
@@ -130,7 +127,7 @@ def zpracuj_a_ulož_soubor(uploaded_file):
         df.to_csv(ULOZENY_ADRESAR_FILE, index=False, encoding="utf-8")
         return df
     except Exception as e:
-        st.error(f"Chyba zpracování Excelu/CSV: {e}")
+        st.error(f"Chyba zpracování CSV souboru: {e}")
         return None
 
 def nacti_trvale_ulozeny_adresar():
@@ -213,7 +210,7 @@ def vykresli_aplikaci():
             if email_sefa:
                 st.session_state["boss_email"] = email_sefa
                 
-            nahrany_soubor = st.file_uploader(t["upload_lbl"], type=["csv", "xlsx", "xls", "txt"])
+            nahrany_soubor = st.file_uploader(t["upload_lbl"], type=["csv", "txt"])
             if nahrany_soubor is not None:
                 df_klienti = zpracuj_a_ulož_soubor(nahrany_soubor)
                 if df_klienti is not None:
@@ -230,49 +227,36 @@ def vykresli_aplikaci():
     with col_d2:
         cas_sch = st.time_input(t["time_lbl"], datetime.now())
 
+    # 🟢 DOKONALÉ ZJEDNODUŠENÍ: Jedno jediné políčko, které okamžitě vyhledává bez klávesy Enter
     st.subheader(t["sec_2"])
-    hledat = st.text_input(t["search_hint"], key="crm_hledat_input")
+    
+    # Sestavíme krásný seznam všech zákazníků z CSV
+    seznam_zakazniku = []
+    mapovani_zaznamu = {}
+    
+    for _, row in df_klienti.iterrows():
+        krasny_text = " | ".join([str(row.iloc[i]) for i in range(min(len(row), 4)) if row.iloc[i]])
+        seznam_zakazniku.append(krasny_text)
+        mapovani_zaznamu[krasny_text] = row.tolist()
+
+    # Trik: Přidáme funkci, která umí hledat i bez diakritiky přímo uvnitř Streamlit selectboxu
+    def vyhledávací_funkce_bez_diakritiky(option):
+        return odstran_diakritiku(option).lower()
+
+    vybrany_box_text = st.selectbox(
+        t["search_hint"],
+        options=seznam_zakazniku,
+        index=None,
+        placeholder=t["select_prompt"]
+    )
     
     vybrany_klient = None
     klient_cisty_nazev = "Klient"
     
-    if hledat:
-        hledat_ciste = odstran_diakritiku(hledat).lower()
-        shoduje_se = df_klienti.apply(
-            lambda row: hledat_ciste in odstran_diakritiku(row.astype(str).str.lower().str.cat(sep=' ')), 
-            axis=1
-        )
-        vysledky_hledani = df_klienti[shoduje_se]
-        pocet_shod = len(vysledky_hledani)
-        
-        # 🎯 NOVINKA: Pokud existuje přesně JEDNA shoda (např. "necas"), ROVNOU klienta vybereme a schováme selectbox
-        if pocet_shod == 1:
-            radek = vysledky_hledani.iloc[0]
-            vybrany_klient = radek.tolist()
-            krasny_nazev = " | ".join([str(radek.iloc[i]) for i in range(min(len(radek), 4)) if radek.iloc[i]])
-            klient_cisty_nazev = krasny_nazev
-            st.success(f"🎯 Automaticky vybrán jediný nalezený klient: {krasny_nazev}")
-            
-        elif pocet_shod > 1:
-            # Pokud je nalezeno více klientů (např. město Pardubice), ukážeme standardní čistý výběr
-            seznam_moznosti = [t["select_prompt"]]
-            vysledky_mapovani = {}
-            
-            for _, row in vysledky_hledani.head(30).iterrows():
-                krasny_nazev = " | ".join([str(row.iloc[i]) for i in range(min(len(row), 4)) if row.iloc[i]])
-                seznam_moznosti.append(krasny_nazev)
-                vysledky_mapovani[krasny_nazev] = row.tolist()
-                
-            box_vyber = st.selectbox("🤝 Vyberte klienta:", seznam_moznosti, label_visibility="collapsed")
-            if box_vyber != t["select_prompt"] and box_vyber in vysledky_mapovani:
-                vybrany_klient = vysledky_mapovani[box_vyber]
-                klient_cisty_nazev = box_vyber
-                st.success(f"{t['selected_ok']} {box_vyber}")
-        else:
-            st.error(t["no_client"])
-    else:
-        # Pokud uživatel nepíše, rozevírací seznam je schovaný a čeká se na text, šetříme místo
-        st.caption("Aplikace čeká na zadání textu pro bleskový vyhledávací filtr.")
+    if vybrany_box_text and vybrany_box_text in mapovani_zaznamu:
+        vybrany_klient = mapovani_zaznamu[vybrany_box_text]
+        klient_cisty_nazev = vybrany_box_text
+        st.success(f"{t['selected_ok']} {vybrany_box_text}")
     st.subheader(t["sec_3"])
     ch_b2b = st.checkbox(t["b2b_lbl"])
     ch_zajem = st.checkbox(t["no_interest"])
