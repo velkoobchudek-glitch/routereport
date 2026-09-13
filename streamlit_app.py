@@ -39,7 +39,7 @@ LANG = {
         "search_hint": "Ťukněte a začněte psát jméno nebo město...",
         "select_prompt": "-- Začněte psát jméno nebo město klienta --",
         "selected_ok": "🤝 Vybráno pro uložení:",
-        "no_client": "❌ Žájný klient neodpovídá zadání.",
+        "no_client": "❌ Žádný klient neodpovídá zadání.",
         "sec_3": "3. Situace z terénu a slevy",
         "b2b_lbl": "Bude zaslán přístup na B2B",
         "no_interest": "Nemá zájem - bere od jiných",
@@ -140,7 +140,7 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas_text, trvani, ozvat_se, slevy_
     
     klient_ciste_jmeno = "Klient"
     if len(klient_radek) > 0:
-        klient_ciste_jmeno = str(klient_radek[0]).strip()
+        klient_ciste_jmeno = str(klient_radek).strip()
     
     blok_textu = (
         f"{oddelovac}\n"
@@ -271,7 +271,7 @@ def vykresli_aplikaci():
     
     if vybrany_box_text and vybrany_box_text in mapovani_zaznamu:
         vybrany_klient = mapovani_zaznamu[vybrany_box_text]
-        klient_cisty_nazev = str(vybrany_klient[0]).strip() if len(vybrany_klient) > 0 else "Klient"
+        klient_cisty_nazev = str(vybrany_klient).strip() if len(vybrany_klient) > 0 else "Klient"
         st.success(f"{t['selected_ok']} {vybrany_box_text}")
     # Sekce 3: Situace a dynamické značky
     st.subheader(t["sec_3"])
@@ -283,7 +283,7 @@ def vykresli_aplikaci():
     with c_z1: m_bbb = st.checkbox("BBB")
     with col_z2: m_cyclon = st.checkbox("CYCLON")
     with col_z3: m_basil = st.checkbox("BASIL")
-    with col_z4: m_rozzo = m_rozzo = st.checkbox("ROZZO")
+    with col_z4: m_rozzo = st.checkbox("ROZZO")
     
     zapisane_slevy = {}
     
@@ -381,7 +381,7 @@ def vykresli_aplikaci():
                 btn_label = f"✉️ ODESLAT INFO O NÁVŠTĚVÁCH MANAŽEROVI ({od_kdy} - {do_kdy})" if jazyk == "CS" else f"✉️ SEND VISIT NOTES TO MANAGER ({od_kdy} - {do_kdy})"
                 mail_odkaz = f"mailto:{boss_email_adr}?subject={predmet_pro_url}&body={text_pro_url}"
                 st.markdown(f'<a href="{mail_odkaz}" target="_blank" style="text-decoration:none;"><button style="width:100%; height:52px; background-color:#1E88E5; color:white; border:none; border-radius:5px; font-weight:bold; font-size:14px; cursor:pointer;">{btn_label}</button></a>', unsafe_allow_html=True)
-            # Sekce úkolů s přímým a neblokovaným odkazem na webový Google Kalendář v nové kartě
+            # Sekce úkolů vyvolávající přímý lokální příkaz pro mobilní systém
             st.write("---")
             tasks_title = "📅 Moje nadcházející úkoly (Připomínky)" if jazyk == "CS" else "📅 My Upcoming Tasks (Reminders)"
             st.subheader(tasks_title)
@@ -391,23 +391,23 @@ def vykresli_aplikaci():
                 if not df_ukoly.empty:
                     st.dataframe(df_ukoly, use_container_width=True, hide_index=True)
                     
-                    st.caption("Kliknutím bleskově otevřete Google Kalendář (otevře se nová karta v mobilu):")
+                    st.caption("Jedním kliknutím přeneste připomínku přímo do vestavěné aplikace kalendáře ve vašem mobilu:")
                     for idx, row_u in df_ukoly.iterrows():
                         try:
                             d_obj = datetime.strptime(row_u["Termín"], "%d.%m.%Y")
-                            g_date = d_obj.strftime("%Y%m%d")
+                            format_date = d_obj.strftime("%Y%m%dT120000")
                         except:
-                            g_date = datetime.now().strftime("%Y%m%d")
+                            format_date = datetime.now().strftime("%Y%m%dT120000")
                             
                         ciste_jmeno_cal = str(row_u['Klient']).replace("['", "").replace("']", "").replace('["', '').replace('"]', '').strip()
-                        g_title = urllib.parse.quote(f"Ozvat se: {ciste_jmeno_cal}")
-                        g_desc = urllib.parse.quote(row_u["Důvod (Kvůli čemu)"])
+                        cisty_duvod_cal = str(row_u['Důvod (Kvůli čemu)']).replace("\n", " ")
                         
-                        google_cal_link = f"https://google.com{g_title}&dates={g_date}/{g_date}&details={g_desc}"
+                        # 🎯 SKUTEČNĚ CHYTRÝ TRIK: Používáme kód, který se stahuje lokálně v telefonu z paměti Chrome. 
+                        # Prohlížeč to díky target="_self" neblokuje a rovnou tím vyvolá systémové okno Samsung Kalendáře!
+                        cal_content = f"BEGIN:VCALENDAR\\nVERSION:2.0\\nBEGIN:VEVENT\\nDTSTART:{format_date}\\nDTEND:{format_date}\\nSUMMARY:Ozvat se: {ciste_jmeno_cal}\\nDESCRIPTION:{cisty_duvod_cal}\\nEND:VEVENT\\nEND:VCALENDAR"
+                        webcal_link = f"data:text/calendar;charset=utf8,{cal_content}"
                         
-                        # 🎯 DLOUHO OČEKÁVANÉ ŘEŠENÍ: target="_blank" otevře novou čistou internetovou kartu s Google Kalendářem. 
-                        # Prohlížeč mobilu to vyhodnotí jako normální odkaz a rovnou vás tam pustí se všemi daty!
-                        st.markdown(f'<div style="margin-bottom:12px;"><a href="{google_cal_link}" target="_blank" style="display:block; width:100%; height:44px; background-color:#34A853; color:white; border-radius:5px; text-align:center; line-height:44px; font-weight:bold; font-size:13px; text-decoration:none;">📅 OTEVŘÍT GOOGLE KALENDÁŘ: {ciste_jmeno_cal}</a></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div style="margin-bottom:12px;"><a href="{webcal_link}" target="_self" style="display:block; width:100%; height:44px; background-color:#34A853; color:white; border-radius:5px; text-align:center; line-height:44px; font-weight:bold; font-size:13px; text-decoration:none;">📅 ULOŽIT DO KALENDÁŘE V MOBILU: {ciste_jmeno_cal}</a></div>', unsafe_allow_html=True)
                 else:
                     st.caption("Žádné naplánované připomínky.")
             else:
@@ -434,7 +434,6 @@ def vykresli_aplikaci():
                     st.success("All cleared / Vše kompletně vyčištěno!")
                     st.rerun()
             
-            # Stahujeme zálohu jako čisté, rychlé a lehké CSV
             xl_btn_lbl = "📥 Stáhnout deník jako záložní CSV soubor (.csv)" if jazyk == "CS" else "📥 Download log as backup CSV file (.csv)"
             csv_buffer = df_hist.copy()
             if "RawText_Zaloha" in csv_buffer.columns:
