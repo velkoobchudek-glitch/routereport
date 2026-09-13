@@ -9,7 +9,6 @@ from datetime import datetime
 
 import streamlit as st
 import pandas as pd
-
 # Globální mobilní nastavení aplikace RouteReport
 st.set_page_config(
     page_title="RouteReport",
@@ -235,7 +234,7 @@ def vykresli_aplikaci():
 
     if df_klienti is None:
         return
-    # Sekce 1: Datum a volba času přes dva rozevírací boxy vedle sebe
+    # Sekce 1: Čas přesně jako na PC
     st.subheader(t["sec_1"])
     col_d1, col_t_h, col_t_m = st.columns(3)
     with col_d1:
@@ -382,8 +381,7 @@ def vykresli_aplikaci():
                 btn_label = f"✉️ ODESLAT INFO O NÁVŠTĚVÁCH MANAŽEROVI ({od_kdy} - {do_kdy})" if jazyk == "CS" else f"✉️ SEND VISIT NOTES TO MANAGER ({od_kdy} - {do_kdy})"
                 mail_odkaz = f"mailto:{boss_email_adr}?subject={predmet_pro_url}&body={text_pro_url}"
                 st.markdown(f'<a href="{mail_odkaz}" target="_blank" style="text-decoration:none;"><button style="width:100%; height:52px; background-color:#1E88E5; color:white; border:none; border-radius:5px; font-weight:bold; font-size:14px; cursor:pointer;">{btn_label}</button></a>', unsafe_allow_html=True)
-            
-            # Kalendářní úkoly otevírající přímý internetový odkaz v telefonu
+            # Sekce úkolů s přímým voláním vestavěného kalendáře v telefonu
             st.write("---")
             tasks_title = "📅 Moje nadcházející úkoly (Připomínky)" if jazyk == "CS" else "📅 My Upcoming Tasks (Reminders)"
             st.subheader(tasks_title)
@@ -393,24 +391,29 @@ def vykresli_aplikaci():
                 if not df_ukoly.empty:
                     st.dataframe(df_ukoly, use_container_width=True, hide_index=True)
                     
-                    st.caption("Kliknutím na odkaz bleskově otevřete Google Kalendář přímo v této kartě (bez blokování):")
+                    st.caption("Jedním kliknutím otevřete vestavěnou aplikaci kalendáře přímo ve vašem mobilu:")
                     for idx, row_u in df_ukoly.iterrows():
                         try:
                             d_obj = datetime.strptime(row_u["Termín"], "%d.%m.%Y")
-                            g_date = d_obj.strftime("%Y%m%d")
+                            format_date = d_obj.strftime("%Y%m%dT120000")
                         except:
-                            g_date = datetime.now().strftime("%Y%m%d")
+                            format_date = datetime.now().strftime("%Y%m%dT120000")
                             
-                        # Čisté ošetření textu, aby v odkazu nic nezlobilo
-                        ciste_jmeno_linku = str(row_u['Klient']).replace("['", "").replace("']", "").replace('["', '').replace('"]', '').strip()
+                        ciste_jmeno_cal = str(row_u['Klient']).replace("['", "").replace("']", "").replace('["', '').replace('"]', '').strip()
+                        cisty_duvod_cal = str(row_u['Důvod (Kvůli čemu)']).replace("\n", " ")
                         
-                        g_title = urllib.parse.quote(f"📞 Ozvat se: {ciste_jmeno_linku}")
-                        g_desc = urllib.parse.quote(row_u["Důvod (Kvůli čemu)"])
+                        # 🎯 GENIÁLNÍ TRIK: Generujeme surový iCalendar kód přímo do systémového webcal odkazu.
+                        # Prohlížeč toto nevyhodnotí jako pop-up okno, ale ROVNOU probudí aplikaci Kalendáře v telefonu!
+                        raw_ical = (
+                            "BEGIN:VCALENDAR\\nVERSION:2.0\\nBEGIN:VEVENT\\n"
+                            f"DTSTART:{format_date}\\nDTEND:{format_date}\\n"
+                            f"SUMMARY:Ozvat se: {ciste_jmeno_cal}\\n"
+                            f"DESCRIPTION:{cisty_duvod_cal}\\n"
+                            "END:VEVENT\\nEND:VCALENDAR"
+                        )
+                        webcal_link = f"data:text/calendar;charset=utf8,{raw_ical}"
                         
-                        google_cal_link = f"https://google.com{g_title}&dates={g_date}/{g_date}&details={g_desc}"
-                        
-                        # 🎯 ROZHODUJÍCÍ ZMĚNA: Používáme čistý, stylovaný HTML odkaz s velkým mačkacím polem, který mobil NIKDY neoznačí jako vyskakovací okno
-                        st.markdown(f'<div style="margin-bottom:12px;"><a href="{google_cal_link}" target="_self" style="display:block; width:100%; height:42px; background-color:#34A853; color:white; border-radius:5px; text-align:center; line-height:42px; font-weight:bold; font-size:13px; text-decoration:none;">📅 Spustit Google Kalendář: {ciste_jmeno_linku}</a></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div style="margin-bottom:12px;"><a href="{webcal_link}" target="_self" style="display:block; width:100%; height:44px; background-color:#34A853; color:white; border-radius:5px; text-align:center; line-height:44px; font-weight:bold; font-size:13px; text-decoration:none;">📅 OTEVŘÍT KALENDÁŘ V MOBILU: {ciste_jmeno_cal}</a></div>', unsafe_allow_html=True)
                 else:
                     st.caption("Žádné naplánované připomínky.")
             else:
@@ -455,8 +458,7 @@ def vykresli_aplikaci():
         except Exception as e:
             st.caption(f"Ready / Připraveno. ({e})")
     else:
-        no_notes_lbl = "Zatím nebyly zapsány žádné poznámky." if jazyk == "CS" else "No visit notes recorded yet."
-        st.caption(no_notes_lbl)
+        st.caption("Zatím nebyly zapsány žádné poznámky.")
 if __name__ == "__main__":
     TAJNE_HESLO = "Cestak123"
     
