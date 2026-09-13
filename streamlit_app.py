@@ -9,6 +9,7 @@ from datetime import datetime
 
 import streamlit as st
 import pandas as pd
+
 # Globální mobilní nastavení aplikace RouteReport
 st.set_page_config(
     page_title="RouteReport",
@@ -21,7 +22,6 @@ EXPORT_FILE = "routereport_zapisy_schuzek.txt"
 ULOZENY_ADRESAR_FILE = "cached_customer_db.csv"
 HISTORIE_SOUBOR = "crm_historie_schuzek.csv"
 UKOLY_SOUBOR = "crm_ukoly_kalendar.csv"
-# Slovník upravený pro lidské poznámky z návštěv v terénu (Čeština)
 LANG = {
     "CS": {
         "title": "📱 RouteReport - Poznámky z terénu",
@@ -49,7 +49,7 @@ LANG = {
         "potential_lbl": "Potenciál odběru prodejny (%):",
         "sec_4": "4. Průběh jednání a poznámky",
         "note_lbl": "Napište průběh jednání nebo výsledek návštěvy:",
-        "remind_check": "🔔 Naplánovat termín příštího kontaktu / ozvání (Připomínka)",
+        "remind_check": "🔔 Naplánovat termín příštího kontaktu / ozvání (Vnitřní připomínka)",
         "remind_date": "Kdy se ozvat znovu:",
         "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVĚ",
         "save_success": "✅ Info o návštěvě úspěšně uloženo do deníku na pozadí!",
@@ -90,7 +90,7 @@ LANG = {
         "potential_lbl": "Store purchase potential (%):",
         "sec_4": "4. Visit Minutes and Notes",
         "note_lbl": "Write visit notes or summary:",
-        "remind_check": "Schedule follow-up / Next contact (Reminder)",
+        "remind_check": "Schedule follow-up / Next contact (Internal Reminder)",
         "remind_date": "When to call again:",
         "btn_save": "💾 SAVE VISIT INFO",
         "save_success": "✅ Visit info successfully saved to log on background!",
@@ -140,7 +140,7 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas_text, trvani, ozvat_se, slevy_
     
     klient_ciste_jmeno = "Klient"
     if len(klient_radek) > 0:
-        klient_ciste_jmeno = str(klient_radek).strip()
+        klient_ciste_jmeno = str(klient_radek).replace("['", "").replace("']", "").replace('["', '').replace('"]', '').strip()
     
     blok_textu = (
         f"{oddelovac}\n"
@@ -179,7 +179,7 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas_text, trvani, ozvat_se, slevy_
             df_novy.to_csv(HISTORIE_SOUBOR, mode='w', header=True, index=False, encoding="utf-8")
             
         if ozvat_se:
-            duvod_kontaktu = f"Slevy: {slevy_data['sleva']}. Poznamka: {poznamka if poznamka else 'Kontrola prodejny.'}"
+            duvod_kontaktu = f"Slevy: {slevy_data['sleva']}. Poznámka: {poznamka if poznamka else 'Kontrola stavu.'}"
             novy_ukol = {
                 "Termín": ozvat_se.strftime('%d.%m.%Y'),
                 "Klient": klient_ciste_jmeno,
@@ -203,6 +203,30 @@ def vykresli_aplikaci():
     t = LANG[jazyk]
     st.title(t["title"])
     
+    # 🟢 VYSKAKOVACÍ OKNO: Automatická ranní kontrola hořících úkolů přímo na displeji
+    if os.path.exists(UKOLY_SOUBOR):
+        try:
+            df_kontrol_u = pd.read_csv(UKOLY_SOUBOR, dtype=str)
+            if not df_kontrol_u.empty:
+                dnes_str = datetime.now().strftime('%d.%m.%Y')
+                shody_dnes = df_kontrol_u[df_kontrol_u["Termín"] == dnes_str]
+                
+                # Pokud dnes máme nějaké úkoly a uživatel je ještě dnes neodkliknul
+                if len(shody_dnes) > 0 and "popup_odkliknuto" not in st.session_state:
+                    @st.dialog("🔔 DNEŠNÍ EXPRESNÍ PŘIPOMÍNKY", title="🔔 Urgentní úkoly na dnes")
+                    def ranni_popup_okno():
+                        st.error(f"⚠️ Pozor! Dnes máte v terénu naplánované {len(shody_dnes)} důležité úkoly:")
+                        for _, r_u in shody_dnes.iterrows():
+                            st.markdown(f"🏢 **Klient:** {r_u['Klient']}")
+                            st.markdown(f"📝 **Úkol:** {r_u['Důvod (Kvůli čemu)']}")
+                            st.write("---")
+                        if st.button("Rozumím, jdu pracovat 👍", use_container_width=True):
+                            st.session_state["popup_odkliknuto"] = True
+                            st.rerun()
+                    ranni_popup_okno()
+        except:
+            pass
+            
     if "zmena_databaze" not in st.session_state:
         st.session_state["zmena_databaze"] = False
 
@@ -271,9 +295,9 @@ def vykresli_aplikaci():
     
     if vybrany_box_text and vybrany_box_text in mapovani_zaznamu:
         vybrany_klient = mapovani_zaznamu[vybrany_box_text]
-        klient_cisty_nazev = str(vybrany_klient).strip() if len(vybrany_klient) > 0 else "Klient"
+        klient_cisty_nazev = str(vybrany_klient).replace("['", "").replace("']", "").replace('["', '').replace('"]', '').strip() if len(vybrany_klient) > 0 else "Klient"
         st.success(f"{t['selected_ok']} {vybrany_box_text}")
-    # Sekce 3: Situace a dynamické značky
+    # Sekce 3: Situace a slevy značek
     st.subheader(t["sec_3"])
     ch_b2b = st.checkbox(t["b2b_lbl"])
     ch_zajem = st.checkbox(t["no_interest"])
@@ -381,76 +405,77 @@ def vykresli_aplikaci():
                 btn_label = f"✉️ ODESLAT INFO O NÁVŠTĚVÁCH MANAŽEROVI ({od_kdy} - {do_kdy})" if jazyk == "CS" else f"✉️ SEND VISIT NOTES TO MANAGER ({od_kdy} - {do_kdy})"
                 mail_odkaz = f"mailto:{boss_email_adr}?subject={predmet_pro_url}&body={text_pro_url}"
                 st.markdown(f'<a href="{mail_odkaz}" target="_blank" style="text-decoration:none;"><button style="width:100%; height:52px; background-color:#1E88E5; color:white; border:none; border-radius:5px; font-weight:bold; font-size:14px; cursor:pointer;">{btn_label}</button></a>', unsafe_allow_html=True)
-            # Sekce úkolů vyvolávající přímý lokální příkaz pro mobilní systém
-            st.write("---")
-            tasks_title = "📅 Moje nadcházející úkoly (Připomínky)" if jazyk == "CS" else "📅 My Upcoming Tasks (Reminders)"
-            st.subheader(tasks_title)
-            
-            if os.path.exists(UKOLY_SOUBOR):
-                df_ukoly = pd.read_csv(UKOLY_SOUBOR, dtype=str)
-                if not df_ukoly.empty:
-                    st.dataframe(df_ukoly, use_container_width=True, hide_index=True)
-                    
-                    st.caption("Jedním kliknutím přeneste připomínku přímo do vestavěné aplikace kalendáře ve vašem mobilu:")
-                    for idx, row_u in df_ukoly.iterrows():
-                        try:
-                            d_obj = datetime.strptime(row_u["Termín"], "%d.%m.%Y")
-                            format_date = d_obj.strftime("%Y%m%dT120000")
-                        except:
-                            format_date = datetime.now().strftime("%Y%m%dT120000")
-                            
-                        ciste_jmeno_cal = str(row_u['Klient']).replace("['", "").replace("']", "").replace('["', '').replace('"]', '').strip()
-                        cisty_duvod_cal = str(row_u['Důvod (Kvůli čemu)']).replace("\n", " ")
-                        
-                        # 🎯 SKUTEČNĚ CHYTRÝ TRIK: Používáme kód, který se stahuje lokálně v telefonu z paměti Chrome. 
-                        # Prohlížeč to díky target="_self" neblokuje a rovnou tím vyvolá systémové okno Samsung Kalendáře!
-                        cal_content = f"BEGIN:VCALENDAR\\nVERSION:2.0\\nBEGIN:VEVENT\\nDTSTART:{format_date}\\nDTEND:{format_date}\\nSUMMARY:Ozvat se: {ciste_jmeno_cal}\\nDESCRIPTION:{cisty_duvod_cal}\\nEND:VEVENT\\nEND:VCALENDAR"
-                        webcal_link = f"data:text/calendar;charset=utf8,{cal_content}"
-                        
-                        st.markdown(f'<div style="margin-bottom:12px;"><a href="{webcal_link}" target="_self" style="display:block; width:100%; height:44px; background-color:#34A853; color:white; border-radius:5px; text-align:center; line-height:44px; font-weight:bold; font-size:13px; text-decoration:none;">📅 ULOŽIT DO KALENDÁŘE V MOBILU: {ciste_jmeno_cal}</a></div>', unsafe_allow_html=True)
-                else:
-                    st.caption("Žádné naplánované připomínky.")
-            else:
-                st.caption("Žádné naplánované připomínky.")
-
-            st.write("---")
-            mg_title = "🗑️ Správa databáze a deníku" if jazyk == "CS" else "🗑️ Log & Database Management"
-            with st.expander(mg_title):
-                row_lbl = "Zadejte číslo řádku ke smazání z deníku:" if jazyk == "CS" else "Enter row number to delete from log:"
-                radek_ke_smaza = st.number_input(row_lbl, min_value=1, max_value=len(df_hist), step=1)
-                
-                del_row_btn = "❌ Smazat tento řádek z deníku" if jazyk == "CS" else "❌ Delete this row from log"
-                if st.button(del_row_btn, use_container_width=True):
-                    df_upraveny = df_hist.drop(df_hist.index[radek_ke_smaza - 1])
-                    df_upraveny.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
-                    st.success("Deleted / Smazáno!")
-                    st.rerun()
-                
-                clear_all_btn = "🚨 VYČISTIT CELÝ DENÍK I KALENDÁŘ (Nový začátek)" if jazyk == "CS" else "🚨 CLEAR LOG & TASKS (New Period)"
-                if st.button(clear_all_btn, use_container_width=True):
-                    if os.path.exists(HISTORIE_SOUBOR): os.remove(HISTORIE_SOUBOR)
-                    if os.path.exists(EXPORT_FILE): os.remove(EXPORT_FILE)
-                    if os.path.exists(UKOLY_SOUBOR): os.remove(UKOLY_SOUBOR)
-                    st.success("All cleared / Vše kompletně vyčištěno!")
-                    st.rerun()
-            
-            xl_btn_lbl = "📥 Stáhnout deník jako záložní CSV soubor (.csv)" if jazyk == "CS" else "📥 Download log as backup CSV file (.csv)"
-            csv_buffer = df_hist.copy()
-            if "RawText_Zaloha" in csv_buffer.columns:
-                csv_buffer = csv_buffer.drop(columns=["RawText_Zaloha"])
-            csv_data_data = csv_buffer.to_csv(index=False, encoding="utf-8")
-            
-            st.download_button(
-                label=xl_btn_lbl,
-                data=csv_data_data,
-                file_name=f"routereport_zaloha_{datetime.now().strftime('%d_%m_%Y')}.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
         except Exception as e:
             st.caption(f"Ready / Připraveno. ({e})")
     else:
         st.caption("Zatím nebyly zapsány žádné poznámky.")
+    st.write("---")
+    tasks_title = "📅 Moje nadcházející úkoly (Připomínky)" if jazyk == "CS" else "📅 My Upcoming Tasks (Reminders)"
+    st.subheader(tasks_title)
+    
+    if os.path.exists(UKOLY_SOUBOR):
+        try:
+            df_ukoly = pd.read_csv(UKOLY_SOUBOR, dtype=str)
+            if not df_ukoly.empty:
+                dnesni_datum = datetime.now().date()
+                
+                for idx, row_u in df_ukoly.iterrows():
+                    try:
+                        t_date = datetime.strptime(row_u["Termín"], "%d.%m.%Y").date()
+                        dny_rozdil = (t_date - dnesni_datum).days
+                        if dny_rozdil < 0:
+                            status_badge = "🔴 DNES HOŘÍ / PROŠLÉ!"
+                        elif dny_rozdil <= 2:
+                            status_badge = "⚠️ Blíží se (Akutní)"
+                        else:
+                            status_badge = "🟢 V plánu"
+                    except:
+                        status_badge = "🟢 V plánu"
+                        
+                    with st.container(border=True):
+                        st.markdown(f"**Status: {status_badge}**")
+                        st.markdown(f"📅 **Kdy:** {row_u['Termín']} | 🏢 **Klient:** {row_u['Klient']}")
+                        st.markdown(f"📝 **Důvod:** {row_u['Důvod (Kvůli čemu)']}")
+                        
+                        if st.button(f"✅ Vyřízeno (Smazat připomínku)", key=f"del_task_btn_{idx}", use_container_width=True):
+                            df_upraveny_ukoly = df_ukoly.drop(df_ukoly.index[idx])
+                            df_upraveny_ukoly.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
+                            st.success("Úkol úspěšně vyřízen a promazán!")
+                            st.rerun()
+            else:
+                st.caption("Nemáte žádné naplánované připomínky.")
+        except:
+            st.caption("Nemáte žádné naplánované připomínky.")
+    else:
+        st.caption("Nemáte žádné naplánované připomínky.")
+
+    st.write("---")
+    with st.expander("🗑️ Správa databáze a čistění"):
+        if os.path.exists(HISTORIE_SOUBOR):
+            df_hist = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
+            row_lbl = "Zadejte číslo řádku ke smazání z deníku:" if jazyk == "CS" else "Enter row number to delete from log:"
+            radek_ke_smaza = st.number_input(row_lbl, min_value=1, max_value=len(df_hist), step=1)
+            if st.button("❌ Smazat tento řádek z deníku", use_container_width=True):
+                df_upraveny = df_hist.drop(df_hist.index[radek_ke_smaza - 1])
+                df_upraveny.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
+                st.success("Smazáno!")
+                st.rerun()
+            
+        if st.button("🚨 VYČISTIT ÚPLNÊ VŠE (Deník i Připomínky)", use_container_width=True):
+            if os.path.exists(HISTORIE_SOUBOR): os.remove(HISTORIE_SOUBOR)
+            if os.path.exists(EXPORT_FILE): os.remove(EXPORT_FILE)
+            if os.path.exists(UKOLY_SOUBOR): os.remove(UKOLY_SOUBOR)
+            st.success("Vše kompletně vyčištěno!")
+            st.rerun()
+    
+    if os.path.exists(HISTORIE_SOUBOR):
+        df_hist = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
+        xl_btn_lbl = "📥 Stáhnout deník jako záložní CSV soubor (.csv)" if jazyk == "CS" else "📥 Download log as backup CSV file (.csv)"
+        csv_buffer = df_hist.copy()
+        if "RawText_Zaloha" in csv_buffer.columns:
+            csv_buffer = csv_buffer.drop(columns=["RawText_Zaloha"])
+        csv_data_data = csv_buffer.to_csv(index=False, encoding="utf-8")
+        st.download_button(label=xl_btn_lbl, data=csv_data_data, file_name=f"routereport_export.csv", mime="text/csv", use_container_width=True)
 if __name__ == "__main__":
     TAJNE_HESLO = "Cestak123"
     
