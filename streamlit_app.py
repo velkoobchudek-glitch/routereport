@@ -21,25 +21,26 @@ st.set_page_config(
 EXPORT_FILE = "routereport_zapisy_schuzek.txt"
 ULOZENY_ADRESAR_FILE = "cached_customer_db.csv"
 HISTORIE_SOUBOR = "crm_historie_schuzek.csv"
+UKOLY_SOUBOR = "crm_ukoly_kalendar.csv"
 
 # Slovník pro kompletní mezinárodní lokalizaci (Čeština a Angličtina)
 LANG = {
     "CS": {
-        "title": "📱 RouteReport - Asistent v terénu",
+        "title": "📱 RouteReport - Poznámky z terénu",
         "cfg_sec": "⚙️ Nastavení databáze zákazníků a e-mailu",
         "cfg_info": "Nahrajte soubor CSV se zákazníky a zadejte e-mail šéfa. Aplikace si vše trvale zapamatuje.",
         "upload_lbl": "Vyberte soubor (pouze CSV):",
-        "email_boss_lbl": "E-mailová adresa zaměstnavatele / šéfa (pro automatické odesílání):",
+        "email_boss_lbl": "E-mailová adresa manažera / šéfa (kam se posílá info):",
         "db_loaded_ok": "✅ Adresář zákazníků i e-mail jsou bezpečně uloženy v mobilu.",
         "db_change_btn": "🔄 Aktualizovat databázi / Změnit e-mail šéfa",
-        "sec_1": "1. Datum, čas a trvání schůzky",
+        "sec_1": "1. Datum, čas a trvání návštěvy",
         "date_lbl": "Datum:",
         "time_lbl": "Čas návštěvy:",
-        "duration_lbl": "Trvání schůzky:",
+        "duration_lbl": "Trvání návštěvy:",
         "sec_2": "2. Vyhledat a vybrat klienta",
         "search_hint": "Ťukněte a začněte psát jméno nebo město...",
         "select_prompt": "-- Začněte psát jméno nebo město klienta --",
-        "selected_ok": "🤝 Vybráno pro zápis:",
+        "selected_ok": "🤝 Vybráno pro uložení:",
         "no_client": "❌ Žádný klient neodpovídá zadání.",
         "sec_3": "3. Situace z terénu a slevy",
         "b2b_lbl": "Bude zaslán přístup na B2B",
@@ -50,11 +51,11 @@ LANG = {
         "potential_lbl": "Potenciál odběru prodejny (%):",
         "sec_4": "4. Průběh jednání a poznámky",
         "note_lbl": "Napište průběh jednání nebo výsledek návštěvy:",
-        "remind_check": "Naplánovat termín příštího kontaktu / ozvání",
+        "remind_check": "🔔 Naplánovat termín příštího kontaktu / ozvání (Připomínka)",
         "remind_date": "Kdy se ozvat znovu:",
-        "btn_save": "💾 ZAPSAT SCHŮZKU DO HISTORIE",
-        "save_success": "✅ Schůzka úspěšně uložena a zapsána!",
-        "copy_title": "📋 Text ke zkopírování do vašeho systému / e-mailu:",
+        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVĚ",
+        "save_success": "✅ Info o návštěvě úspěšně uloženo do deníku na pozadí!",
+        "copy_title": "📋 Text ke zkopírování (pokud potřebujete):",
         "out_date": "📅 DATUM A ČAS",
         "out_dur": "⏱️ TRVÁNÍ",
         "out_client": "🏢 KLIENT",
@@ -66,21 +67,21 @@ LANG = {
         "out_remind": "📞 OZVAT SE"
     },
     "EN": {
-        "title": "📱 RouteReport - Field Sales Assistant",
+        "title": "📱 RouteReport - Field Notes",
         "cfg_sec": "⚙️ Customer Database & Email Settings",
-        "cfg_info": "Upload a CSV file and enter your boss's email. The app will remember it permanently.",
+        "cfg_info": "Upload a CSV file with your customers and enter the manager's email. The app will remember it.",
         "upload_lbl": "Select database file (CSV only):",
-        "email_boss_lbl": "Employer / Boss Email Address (for auto-sending):",
+        "email_boss_lbl": "Manager / Boss Email Address (where info is sent):",
         "db_loaded_ok": "✅ Customer database and email are permanently saved in your mobile.",
-        "db_change_btn": "🔄 Update Database / Change Boss Email",
-        "sec_1": "1. Date, Time and Duration of the Meeting",
+        "db_change_btn": "🔄 Update Database / Change Email",
+        "sec_1": "1. Date, Time and Duration of the Visit",
         "date_lbl": "Date:",
         "time_lbl": "Visit Time:",
-        "duration_lbl": "Meeting Duration:",
+        "duration_lbl": "Visit Duration:",
         "sec_2": "2. Search and Select Client",
         "search_hint": "Tap and start typing name or city...",
         "select_prompt": "-- Start typing client name or city --",
-        "selected_ok": "🤝 Selected for report:",
+        "selected_ok": "🤝 Selected for log:",
         "no_client": "❌ No client matches your search.",
         "sec_3": "3. Field Situations and Discounts",
         "b2b_lbl": "B2B portal login will be sent",
@@ -89,13 +90,13 @@ LANG = {
         "discount_lbl": "Promised discount on main brand (%):",
         "competitor_lbl": "Main competitor in store:",
         "potential_lbl": "Store purchase potential (%):",
-        "sec_4": "4. Meeting Minutes and Notes",
-        "note_lbl": "Write meeting notes or follow-up summary:",
-        "remind_check": "Schedule a follow-up date / next contact",
+        "sec_4": "4. Visit Minutes and Notes",
+        "note_lbl": "Write visit notes or summary:",
+        "remind_check": "🔔 Schedule follow-up / Next contact (Reminder)",
         "remind_date": "When to call again:",
-        "btn_save": "💾 SAVE MEETING TO HISTORY",
-        "save_success": "✅ Meeting successfully saved to disk!",
-        "copy_title": "📋 Text to copy into your email / CRM system:",
+        "btn_save": "💾 SAVE VISIT INFO",
+        "save_success": "✅ Visit info successfully saved to log on background!",
+        "copy_title": "📋 Text to copy (if needed):",
         "out_date": "📅 DATE & TIME",
         "out_dur": "⏱️ DURATION",
         "out_client": "🏢 CLIENT",
@@ -112,18 +113,40 @@ def odstran_diakritiku(text):
         text = str(text)
     return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
 
+# 🟢 NOVINKA: Generátor standardního kalendářního souboru (.ics), který otevře Apple/Google/Outlook kalendář v mobilu
+def vygeneruj_ics_soubor(datum_ukolu, klient_jmeno, duvod):
+    datum_str = datum_ukolu.replace(".", "") # Převod z DDMMYYYY
+    try:
+        dt = datetime.strptime(datum_ukolu, "%d.%m.%Y")
+        ics_format_date = dt.strftime("%Y%m%d")
+    except:
+        ics_format_date = datetime.now().strftime("%Y%m%d")
+        
+    cisty_duvod = duvod.replace("\n", " ")
+    ics_content = (
+        "BEGIN:VCALENDAR\n"
+        "VERSION:2.0\n"
+        "PRODID:-//RouteReport//Tasks//EN\n"
+        "BEGIN:VEVENT\n"
+        f"DTSTART;VALUE=DATE:{ics_format_date}\n"
+        f"DTEND;VALUE=DATE:{ics_format_date}\n"
+        f"SUMMARY:📞 Ozvat se: {klient_jmeno}\n"
+        f"DESCRIPTION:Důvod kontaktu: {cisty_duvod}\n"
+        "PRIORITY:5\n"
+        "END:VEVENT\n"
+        "END:VCALENDAR"
+    )
+    return ics_content
+
 @st.cache_data
 def zpracuj_a_ulož_soubor(uploaded_file):
     if uploaded_file is None:
         return None
     try:
-        # Čteme čisté a bleskové CSV soubory
         df = pd.read_csv(uploaded_file, sep=None, engine='python', dtype=str)
-        
         nove_sloupce = [f"Col_{i}" for i in range(len(df.columns))]
         df.columns = nove_sloupce
         df = df.fillna("")
-        
         df.to_csv(ULOZENY_ADRESAR_FILE, index=False, encoding="utf-8")
         return df
     except Exception as e:
@@ -141,6 +164,7 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas, trvani, ozvat_se, slevy_data,
     oddelovac = "=" * 45
     t = LANG[jazyk]
     klient_vystup = " | ".join([str(x) for x in klient_radek[:4] if x])
+    klient_kratky = str(klient_radek[0]) if len(klient_radek) > 0 else "Klient"
     
     blok_textu = (
         f"{oddelovac}\n"
@@ -169,13 +193,28 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas, trvani, ozvat_se, slevy_data,
             "Slevy Značek": slevy_data['sleva'],
             "Konkurence": slevy_data['konkurence'],
             "Potenciál": slevy_data['potencial'],
-            "Poznámka": poznamka if poznamka else ""
+            "Poznámka": poznamka if poznamka else "",
+            "RawText_Zaloha": blok_textu
         }
         df_novy = pd.DataFrame([novy_radek])
         if os.path.exists(HISTORIE_SOUBOR):
             df_novy.to_csv(HISTORIE_SOUBOR, mode='a', header=False, index=False, encoding="utf-8")
         else:
             df_novy.to_csv(HISTORIE_SOUBOR, mode='w', header=True, index=False, encoding="utf-8")
+            
+        # 🟢 AUTOMATICKÝ ÚKOLOVNÍK: Pokud uživatel vybral datum připomínky, zapíšeme úkol do kalendáře
+        if ozvat_se:
+            duvod_kontaktu = f"Slevy: {slevy_data['sleva']}. Poznámka: {poznamka if poznamka else 'Zkontrolovat stav prodejny.'}"
+            novy_ukol = {
+                "Termín": ozvat_se.strftime('%d.%m.%Y'),
+                "Klient": klient_kratky,
+                "Důvod (Kvůli čemu)": duvod_kontaktu
+            }
+            df_ukol = pd.DataFrame([novy_ukol])
+            if os.path.exists(UKOLY_SOUBOR):
+                df_ukol.to_csv(UKOLY_SOUBOR, mode='a', header=False, index=False, encoding="utf-8")
+            else:
+                df_ukol.to_csv(UKOLY_SOUBOR, mode='w', header=True, index=False, encoding="utf-8")
             
         return blok_textu
     except Exception as e:
@@ -227,10 +266,8 @@ def vykresli_aplikaci():
     with col_d2:
         cas_sch = st.time_input(t["time_lbl"], datetime.now())
 
-    # 🟢 DOKONALÉ ZJEDNODUŠENÍ: Jedno jediné políčko, které okamžitě vyhledává bez klávesy Enter
     st.subheader(t["sec_2"])
     
-    # Sestavíme krásný seznam všech zákazníků z CSV
     seznam_zakazniku = []
     mapovani_zaznamu = {}
     
@@ -238,10 +275,6 @@ def vykresli_aplikaci():
         krasny_text = " | ".join([str(row.iloc[i]) for i in range(min(len(row), 4)) if row.iloc[i]])
         seznam_zakazniku.append(krasny_text)
         mapovani_zaznamu[krasny_text] = row.tolist()
-
-    # Trik: Přidáme funkci, která umí hledat i bez diakritiky přímo uvnitř Streamlit selectboxu
-    def vyhledávací_funkce_bez_diakritiky(option):
-        return odstran_diakritiku(option).lower()
 
     vybrany_box_text = st.selectbox(
         t["search_hint"],
@@ -299,11 +332,6 @@ def vykresli_aplikaci():
 
     st.write("---")
     
-    if "posledni_report" not in st.session_state:
-        st.session_state["posledni_report"] = ""
-    if "posledni_klient" not in st.session_state:
-        st.session_state["posledni_klient"] = "Klient"
-
     if st.button(t["btn_save"], use_container_width=True):
         if not vybrany_klient:
             st.error("❌ Please select a client first / Nejdříve vyberte klienta!")
@@ -323,7 +351,7 @@ def vykresli_aplikaci():
             sleva_string = ", ".join(slevy_vystup_list) if slevy_vystup_list else "Není"
             
             slevy_objekt = {
-                "situace": ", ".join(sit_seznam) if sit_seznam else "Žádná specifická situace",
+                "situace": ", ".join(sit_seznam) if sit_seznam else "Žádná specifická situation",
                 "sleva": sleva_string,
                 "konkurence": txt_konkurence if txt_konkurence else "Nezadáno",
                 "potencial": f"{txt_potencial} %" if txt_potencial else "Nezadáno"
@@ -332,75 +360,154 @@ def vykresli_aplikaci():
             vystupni_blok = zapis_zaznam_na_disk(
                 vybrany_klient, datum_sch, cas_sch, txt_trvani, dt_ozvat, slevy_objekt, txt_poznamka, jazyk
             )
-            
             if vystupni_blok:
-                st.session_state["posledni_report"] = vystupni_blok
-                st.session_state["posledni_klient"] = klient_cisty_nazev
                 st.success(t["save_success"])
                 st.rerun()
 
-    if st.session_state["posledni_report"]:
-        st.subheader("✉️ Odeslat hotový report z mobilu:")
-        
-        text_pro_url = urllib.parse.quote(st.session_state["posledni_report"])
-        predmet_pro_url = urllib.parse.quote(f"RouteReport: {st.session_state['posledni_klient']}")
-        boss_email_adr = st.session_state.get("boss_email", "")
-        
-        mail_odkaz = f"mailto:{boss_email_adr}?subject={predmet_pro_url}&body={text_pro_url}"
-        st.markdown(f'<a href="{mail_odkaz}" target="_blank" style="text-decoration:none;"><button style="width:100%; height:48px; background-color:#4CAF50; color:white; border:none; border-radius:5px; font-weight:bold; font-size:16px; cursor:pointer;">✉️ ODESLAT REPORT E-MAILEM</button></a>', unsafe_allow_html=True)
-
-        st.subheader(t["copy_title"])
-        st.code(st.session_state["posledni_report"])
-
     st.write("---")
-    st.subheader("📋 Přehled zapsaných schůzek")
+    hist_title = "📋 Deník mých návštěv" if jazyk == "CS" else "📋 My Visit Log"
+    st.subheader(hist_title)
     
     if os.path.exists(HISTORIE_SOUBOR):
         try:
             df_hist = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
             df_zobrazeni = df_hist.copy()
             df_zobrazeni.index = df_zobrazeni.index + 1
+            if "RawText_Zaloha" in df_zobrazeni.columns:
+                df_zobrazeni = df_zobrazeni.drop(columns=["RawText_Zaloha"])
             df_zobrazeni = df_zobrazeni.iloc[::-1]
             st.dataframe(df_zobrazeni, use_container_width=True)
             
-            with st.expander("🗑️ Smazat chybný řádek z historie"):
-                radek_ke_smaza = st.number_input("Zadejte číslo řádku ke smazání (podle tabulky):", min_value=1, max_value=len(df_hist), step=1)
-                if st.button("❌ Definitivně smazat tento řádek", use_container_width=True):
+            st.write("")
+            with st.container():
+                send_sec_title = "✉️ Odeslání nashromážděných poznámek:" if jazyk == "CS" else "✉️ Send Collected Visit Notes:"
+                st.subheader(send_sec_title)
+                
+                datumy_v_tabulce = df_hist["Datum"].tolist()
+                od_kdy = datumy_v_tabulce if datumy_v_tabulce else datetime.now().strftime('%d.%m.%Y')
+                do_kdy = datumy_v_tabulce[-1] if datumy_v_tabulce else datetime.now().strftime('%d.%m.%Y')
+                
+                kompletni_text_mailu = ""
+                if "RawText_Zaloha" in df_hist.columns:
+                    kompletni_text_mailu = "\n".join(df_hist["RawText_Zaloha"].tolist())
+                
+                text_pro_url = urllib.parse.quote(kompletni_text_mailu)
+                mail_subject = f"RouteReport: Info o návštěvách ({od_kdy} - {do_kdy})" if jazyk == "CS" else f"RouteReport: Visit Notes ({od_kdy} - {do_kdy})"
+                predmet_pro_url = urllib.parse.quote(mail_subject)
+                boss_email_adr = st.session_state.get("boss_email", "")
+                
+                btn_label = f"✉️ ODESLAT INFO O NÁVŠTĚVÁCH MANAŽEROVI ({od_kdy} - {do_kdy})" if jazyk == "CS" else f"✉️ SEND VISIT NOTES TO MANAGER ({od_kdy} - {do_kdy})"
+                mail_odkaz = f"mailto:{boss_email_adr}?subject={predmet_pro_url}&body={text_pro_url}"
+                st.markdown(f'<a href="{mail_odkaz}" target="_blank" style="text-decoration:none;"><button style="width:100%; height:52px; background-color:#1E88E5; color:white; border:none; border-radius:5px; font-weight:bold; font-size:14px; cursor:pointer;">{btn_label}</button></a>', unsafe_allow_html=True)
+            
+            # 📅 NOVINKA: PŘEHLEDNÁ TABULKA NADCHÁZEJÍCÍCH ÚKOLŮ S EXPORTEM DO MOBILNÍHO KALENDÁŘE
+            st.write("---")
+            tasks_title = "📅 Moje nadcházející úkoly (Připomínky)" if jazyk == "CS" else "📅 My Upcoming Tasks (Reminders)"
+            st.subheader(tasks_title)
+            
+            if os.path.exists(UKOLY_SOUBOR):
+                df_ukoly = pd.read_csv(UKOLY_SOUBOR, dtype=str)
+                if not df_ukoly.empty:
+                    st.dataframe(df_ukoly, use_container_width=True, hide_index=True)
+                    
+                    # Generování tlačítek pro stažení úkolu do Apple/Google kalendáře přímo v mobilu
+                    st.caption("Kliknutím stáhnete úkol jako připomínku přímo do kalendáře ve vašem mobilu:")
+                    for idx, row_u in df_ukoly.iterrows():
+                        ics_data = vygeneruj_ics_soubor(row_u["Termín"], row_u["Klient"], row_u["Důvod (Kvůli čemu)"])
+                        st.download_button(
+                            label=f"📅 Přidat do kalendáře: {row_u['Klient']} ({row_u['Termín']})",
+                            data=ics_data,
+                            file_name=f"task_{row_u['Klient']}_{row_u['Termín']}.ics",
+                            mime="text/calendar",
+                            key=f"ics_btn_{idx}"
+                        )
+                else:
+                    st.caption("Žádné naplánované připomínky.")
+            else:
+                st.caption("Žádné naplánované připomínky.")
+
+            st.write("---")
+            mg_title = "🗑️ Správa databáze a deníku" if jazyk == "CS" else "🗑️ Log & Database Management"
+            with st.expander(mg_title):
+                row_lbl = "Zadejte číslo řádku ke smazání z deníku:" if jazyk == "CS" else "Enter row number to delete from log:"
+                radek_ke_smaza = st.number_input(row_lbl, min_value=1, max_value=len(df_hist), step=1)
+                
+                del_row_btn = "❌ Smazat tento řádek z deníku" if jazyk == "CS" else "❌ Delete this row from log"
+                if st.button(del_row_btn, use_container_width=True):
                     df_upraveny = df_hist.drop(df_hist.index[radek_ke_smaza - 1])
                     df_upraveny.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
-                    st.success(f"Řádek {radek_ke_smaza} byl smazán!")
+                    st.success("Deleted / Smazáno!")
+                    st.rerun()
+                
+                clear_all_btn = "🚨 VYČISTIT CELÝ DENÍK I KALENDÁŘ (Nový začátek)" if jazyk == "CS" else "🚨 CLEAR LOG & TASKS (New Period)"
+                if st.button(clear_all_btn, use_container_width=True):
+                    if os.path.exists(HISTORIE_SOUBOR): os.remove(HISTORIE_SOUBOR)
+                    if os.path.exists(EXPORT_FILE): os.remove(EXPORT_FILE)
+                    if os.path.exists(UKOLY_SOUBOR): os.remove(UKOLY_SOUBOR)
+                    st.success("All cleared / Vše kompletně vyčištěno!")
                     st.rerun()
             
+            xl_btn_lbl = "📥 Stáhnout deník jako čistý Excel (.xlsx)" if jazyk == "CS" else "📥 Download log as clean Excel (.xlsx)"
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                df_hist.to_excel(writer, index=False, sheet_name='Schůzky')
+                df_excel_export = df_hist.copy()
+                if "RawText_Zaloha" in df_excel_export.columns:
+                    df_excel_export = df_excel_export.drop(columns=["RawText_Zaloha"])
+                df_excel_export.to_excel(writer, index=False, sheet_name='Visits')
             
             st.download_button(
-                label="📥 Stáhnout celou historii (Excel)",
+                label=xl_btn_lbl,
                 data=buffer.getvalue(),
-                file_name=f"crm_report_schuzek_{datetime.now().strftime('%d_%m_%Y')}.xlsx",
+                file_name=f"routereport_export_{datetime.now().strftime('%d_%m_%Y')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
-        except:
-            st.caption("Zatím nebyly zapsány žádné schůzky.")
+        except Exception as e:
+            st.caption(f"Ready / Připraveno. ({e})")
     else:
-        st.caption("Zatím nebyly zapsány žádné schůzky.")
+        no_notes_lbl = "Zatím nebyly zapsány žádné poznámky." if jazyk == "CS" else "No visit notes recorded yet."
+        st.caption(no_notes_lbl)
 if __name__ == "__main__":
     TAJNE_HESLO = "Cestak123"
     
+    st.markdown(
+        """
+        <script>
+        function checkLogin() {
+            const loggedIn = localStorage.getItem('routereport_auth');
+            const loginTime = localStorage.getItem('routereport_auth_time');
+            const now = new Date().getTime();
+            if (loggedIn === 'true' && loginTime && (now - parseInt(loginTime) < 86400000)) {
+                return true;
+            }
+            return false;
+        }
+        </script>
+        """,
+        unsafe_allow_html=True
+    )
+
     if "prihlasen" not in st.session_state:
         st.session_state["prihlasen"] = False
-        
+
     if not st.session_state["prihlasen"]:
-        st.subheader("🔒 RouteReport - Soukromý přístup")
-        vstoupit_heslo = st.text_input("Zadejte přístupové heslo:", type="password")
+        st.subheader("🔒 RouteReport - Private Access")
+        vstoupit_heslo = st.text_input("Zadejte přístupové heslo / Enter Password:", type="password")
         
-        if st.button("Vstoupit do aplikace", use_container_width=True):
+        if st.button("Vstoupit do aplikace / Enter App", use_container_width=True):
             if vstoupit_heslo == TAJNE_HESLO:
                 st.session_state["prihlasen"] = True
+                st.markdown(
+                    f"""
+                    <script>
+                    localStorage.setItem('routereport_auth', 'true');
+                    localStorage.setItem('routereport_auth_time', '{int(datetime.now().timestamp() * 1000)}');
+                    </script>
+                    """,
+                    unsafe_allow_html=True
+                )
                 st.rerun()
             else:
-                st.error("❌ Nesprávné heslo! Přístup odepřen.")
+                st.error("❌ Nesprávné heslo! Přístup odepřen / Access Denied.")
     else:
         vykresli_aplikaci()
