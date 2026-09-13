@@ -52,7 +52,7 @@ LANG = {
         "note_lbl": "Napište průběh jednání nebo výsledek návštěvy:",
         "remind_check": "🔔 Naplánovat termín příštího kontaktu / ozvání (Připomínka)",
         "remind_date": "Kdy se ozvat znovu:",
-        "btn_save": "💾 ULOŽIT INFO O NÁVŠTÊVĚ",
+        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVĚ",
         "save_success": "✅ Info o návštěvě úspěšně uloženo do deníku na pozadí!",
         "copy_title": "📋 Text ke zkopírování (pokud potřebujete):",
         "out_date": "📅 DATUM A ČAS",
@@ -393,22 +393,24 @@ def vykresli_aplikaci():
                 if not df_ukoly.empty:
                     st.dataframe(df_ukoly, use_container_width=True, hide_index=True)
                     
-                    st.caption("Kliknutím bleskově otevřete Google Kalendář přímo v této kartě (bez blokování a stahování):")
+                    st.caption("Kliknutím bleskově otevřete nativní aplikaci kalendáře ve vašem telefonu:")
                     for idx, row_u in df_ukoly.iterrows():
                         try:
                             d_obj = datetime.strptime(row_u["Termín"], "%d.%m.%Y")
-                            g_date = d_obj.strftime("%Y%m%d")
+                            g_date = d_obj.strftime("%Y%m%dT120000")
                         except:
-                            g_date = datetime.now().strftime("%Y%m%d")
+                            g_date = datetime.now().strftime("%Y%m%dT120000")
                             
                         ciste_jmeno_linku = str(row_u['Klient']).strip()
-                        g_title = urllib.parse.quote(f"📞 Ozvat se: {ciste_jmeno_linku}")
+                        g_title = urllib.parse.quote(f"Ozvat se: {ciste_jmeno_linku}")
                         g_desc = urllib.parse.quote(row_u["Důvod (Kvůli čemu)"])
                         
-                        google_cal_link = f"https://google.com{g_title}&dates={g_date}/{g_date}&details={g_desc}"
+                        # 🎯 ROZHODUJÍCÍ ZMĚNA: Používáme čistý standard webcal datového proudu. 
+                        # To donutí mobilní systém Chrome NEOTEVÍRAT kartu, ale ROVNOU vzbudit Kalendář v mobilu!
+                        cal_content = f"BEGIN:VCALENDAR\\nVERSION:2.0\\nBEGIN:VEVENT\\nDTSTART:{g_date}\\nDTEND:{g_date}\\nSUMMARY:{g_title}\\nDESCRIPTION:{g_desc}\\nEND:VEVENT\\nEND:VCALENDAR"
+                        webcal_link = f"data:text/calendar;charset=utf8,{cal_content}"
                         
-                        # 📅 PŘÍMÝ ODKAZ: target="_self" zaručí otevření přímo pod Chromem v mobilu na jedno kliknutí bez stahování .ics
-                        st.markdown(f'<div style="margin-bottom:12px;"><a href="{google_cal_link}" target="_self" style="display:block; width:100%; height:44px; background-color:#34A853; color:white; border-radius:5px; text-align:center; line-height:44px; font-weight:bold; font-size:13px; text-decoration:none;">📅 OTEVŘÍT GOOGLE KALENDÁŘ: {ciste_jmeno_linku}</a></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div style="margin-bottom:12px;"><a href="{webcal_link}" target="_self" style="display:block; width:100%; height:44px; background-color:#34A853; color:white; border-radius:5px; text-align:center; line-height:44px; font-weight:bold; font-size:13px; text-decoration:none;">📅 ULOŽIT DO KALENDÁŘE V MOBILU: {ciste_jmeno_linku}</a></div>', unsafe_allow_html=True)
                 else:
                     st.caption("Žádné naplánované připomínky.")
             else:
@@ -435,7 +437,7 @@ def vykresli_aplikaci():
                     st.success("All cleared / Vše kompletně vyčištěno!")
                     st.rerun()
             
-            # Stahujeme zálohu jako čisté, rychlé a lehké CSV (Excel je kompletně vymazán)
+            # Stahujeme zálohu jako čisté, rychlé a lehké CSV
             xl_btn_lbl = "📥 Stáhnout deník jako záložní CSV soubor (.csv)" if jazyk == "CS" else "📥 Download log as backup CSV file (.csv)"
             csv_buffer = df_hist.copy()
             if "RawText_Zaloha" in csv_buffer.columns:
