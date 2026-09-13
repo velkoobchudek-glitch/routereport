@@ -139,8 +139,10 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas_text, trvani, ozvat_se, slevy_
     t = LANG[jazyk]
     klient_vystup = " | ".join([str(x) for x in klient_radek[:4] if x])
     
-    # 🟢 AKTUALIZOVÁNO: Bereme pouze první políčko z řádku (čisté jméno), abychom nepletli adresy do tlačítka
-    klient_ciste_jmeno = str(klient_radek[0]) if len(klient_radek) > 0 else "Klient"
+    # Filtrace pro získání čistého prvního sloupce z tabulky (Název firmy / Jméno)
+    klient_ciste_jmeno = "Klient"
+    if len(klient_radek) > 0:
+        klient_ciste_jmeno = str(klient_radek[0]).strip()
     
     blok_textu = (
         f"{oddelovac}\n"
@@ -182,7 +184,7 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas_text, trvani, ozvat_se, slevy_
             duvod_kontaktu = f"Slevy: {slevy_data['sleva']}. Poznamka: {poznamka if poznamka else 'Kontrola prodejny.'}"
             novy_ukol = {
                 "Termín": ozvat_se.strftime('%d.%m.%Y'),
-                "Klient": klient_ciste_jmeno, # Čisté jméno bez polí a závorek
+                "Klient": klient_ciste_jmeno,
                 "Důvod (Kvůli čemu)": duvod_kontaktu
             }
             df_ukol = pd.DataFrame([novy_ukol])
@@ -271,8 +273,7 @@ def vykresli_aplikaci():
     
     if vybrany_box_text and vybrany_box_text in mapovani_zaznamu:
         vybrany_klient = mapovani_zaznamu[vybrany_box_text]
-        # Pro název e-mailu vezmeme čisté první políčko z řádku
-        klient_cisty_nazev = str(vybrany_klient[0]) if len(vybrany_klient) > 0 else "Klient"
+        klient_cisty_nazev = str(vybrany_klient[0]).strip() if len(vybrany_klient) > 0 else "Klient"
         st.success(f"{t['selected_ok']} {vybrany_box_text}")
     # Sekce 3: Situace a dynamické značky
     st.subheader(t["sec_3"])
@@ -401,15 +402,15 @@ def vykresli_aplikaci():
                         except:
                             g_date = datetime.now().strftime("%Y%m%d")
                             
-                        # Očištění jména od programátorských závorek pro čisté zobrazení
-                        ciste_jmeno_tlacitka = str(row_u['Klient']).replace("['", "").replace("']", "").split(" | ")[0]
+                        # Čisté jméno bez polí, závorek a uvozovek
+                        ciste_jmeno_tlacitka = str(row_u['Klient']).replace("['", "").replace("']", "").replace('["', '').replace('"]', '').strip()
                         
                         g_title = urllib.parse.quote(f"📞 Ozvat se: {ciste_jmeno_tlacitka}")
                         g_desc = urllib.parse.quote(row_u["Důvod (Kvůli čemu)"])
                         
                         google_cal_link = f"https://google.com{g_title}&dates={g_date}/{g_date}&details={g_desc}"
-                        # 📅 OPRAVENO: Tlačítko má teď krátký a čistý název, skvěle se mačká na mobilu
-                        st.markdown(f'<a href="{google_cal_link}" target="_blank" style="text-decoration:none;"><button style="width:100%; height:44px; background-color:#34A853; color:white; border:none; border-radius:5px; font-weight:bold; margin-bottom:8px; font-size:13px; padding:0px 10px; cursor:pointer;">📅 Přidat do kalendáře: {ciste_jmeno_tlacitka}</button></a>', unsafe_allow_html=True)
+                        # 🟢 KLIČOVÁ OPRAVA: Odstraněn parametr target="_blank". Odkaz se otevře v téže kartě, což mobilní Chrome NIKDY nezablokuje!
+                        st.markdown(f'<a href="{google_cal_link}" style="text-decoration:none;"><button style="width:100%; height:44px; background-color:#34A853; color:white; border:none; border-radius:5px; font-weight:bold; margin-bottom:8px; font-size:13px; padding:0px 10px; cursor:pointer;">📅 Přidat do kalendáře: {ciste_jmeno_tlacitka}</button></a>', unsafe_allow_html=True)
                 else:
                     st.caption("Žádné naplánované připomínky.")
             else:
