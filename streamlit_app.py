@@ -139,7 +139,6 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas_text, trvani, ozvat_se, slevy_
     t = LANG[jazyk]
     klient_vystup = " | ".join([str(x) for x in klient_radek[:4] if x])
     
-    # Filtrace pro získání čistého prvního sloupce z tabulky (Název firmy / Jméno)
     klient_ciste_jmeno = "Klient"
     if len(klient_radek) > 0:
         klient_ciste_jmeno = str(klient_radek[0]).strip()
@@ -394,7 +393,7 @@ def vykresli_aplikaci():
                 if not df_ukoly.empty:
                     st.dataframe(df_ukoly, use_container_width=True, hide_index=True)
                     
-                    st.caption("Kliknutím bleskově uložíte připomínku do kalendáře v mobilu (vše se předvyplní samo):")
+                    st.caption("Kliknutím na odkaz bleskově otevřete Google Kalendář přímo v této kartě (bez blokování):")
                     for idx, row_u in df_ukoly.iterrows():
                         try:
                             d_obj = datetime.strptime(row_u["Termín"], "%d.%m.%Y")
@@ -402,15 +401,16 @@ def vykresli_aplikaci():
                         except:
                             g_date = datetime.now().strftime("%Y%m%d")
                             
-                        # Čisté jméno bez polí, závorek a uvozovek
-                        ciste_jmeno_tlacitka = str(row_u['Klient']).replace("['", "").replace("']", "").replace('["', '').replace('"]', '').strip()
+                        # Čisté ošetření textu, aby v odkazu nic nezlobilo
+                        ciste_jmeno_linku = str(row_u['Klient']).replace("['", "").replace("']", "").replace('["', '').replace('"]', '').strip()
                         
-                        g_title = urllib.parse.quote(f"📞 Ozvat se: {ciste_jmeno_tlacitka}")
+                        g_title = urllib.parse.quote(f"📞 Ozvat se: {ciste_jmeno_linku}")
                         g_desc = urllib.parse.quote(row_u["Důvod (Kvůli čemu)"])
                         
                         google_cal_link = f"https://google.com{g_title}&dates={g_date}/{g_date}&details={g_desc}"
-                        # 🟢 KLIČOVÁ OPRAVA: Odstraněn parametr target="_blank". Odkaz se otevře v téže kartě, což mobilní Chrome NIKDY nezablokuje!
-                        st.markdown(f'<a href="{google_cal_link}" style="text-decoration:none;"><button style="width:100%; height:44px; background-color:#34A853; color:white; border:none; border-radius:5px; font-weight:bold; margin-bottom:8px; font-size:13px; padding:0px 10px; cursor:pointer;">📅 Přidat do kalendáře: {ciste_jmeno_tlacitka}</button></a>', unsafe_allow_html=True)
+                        
+                        # 🎯 ROZHODUJÍCÍ ZMĚNA: Používáme čistý, stylovaný HTML odkaz s velkým mačkacím polem, který mobil NIKDY neoznačí jako vyskakovací okno
+                        st.markdown(f'<div style="margin-bottom:12px;"><a href="{google_cal_link}" target="_self" style="display:block; width:100%; height:42px; background-color:#34A853; color:white; border-radius:5px; text-align:center; line-height:42px; font-weight:bold; font-size:13px; text-decoration:none;">📅 Spustit Google Kalendář: {ciste_jmeno_linku}</a></div>', unsafe_allow_html=True)
                 else:
                     st.caption("Žádné naplánované připomínky.")
             else:
