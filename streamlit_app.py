@@ -69,7 +69,7 @@ LANG = {
         "out_dur": "⏱️ TRVÁNÍ",
         "out_client": "🏢 KLIENT",
         "out_sit": "📌 SITUACE",
-        "out_disc": "💰 SLEVA",
+        "out_disc": "💰 SLEVY ZNAČEK",
         "out_comp": "⚔️ KONKURENCE",
         "out_pot": "📊 POTENCIÁL",
         "out_note": "📝 POZNÁMKA",
@@ -110,7 +110,7 @@ LANG = {
         "out_dur": "⏱️ DURATION",
         "out_client": "🏢 CLIENT",
         "out_sit": "📌 SITUATION",
-        "out_disc": "💰 DISCOUNT",
+        "out_disc": "💰 BRAND DISCOUNTS",
         "out_comp": "⚔️ COMPETITOR",
         "out_pot": "📊 POTENTIAL",
         "out_note": "📝 NOTES",
@@ -174,7 +174,7 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas, trvani, ozvat_se, slevy_data,
             "Klient": klient_vystup,
             "Trvání (min)": trvani,
             "Situace": slevy_data['situace'],
-            "Sleva": slevy_data['sleva'],
+            "Slevy Značek": slevy_data['sleva'],
             "Konkurence": slevy_data['konkurence'],
             "Potenciál": slevy_data['potencial'],
             "Poznámka": poznamka if poznamka else ""
@@ -202,12 +202,10 @@ def vykresli_aplikaci():
 
     df_klienti = nacti_trvale_ulozeny_adresar()
     
-    # Načtení dříve uloženého e-mailu šéfa z paměti aplikace
     email_sefa = st.sidebar.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", ""))
     if email_sefa:
         st.session_state["boss_email"] = email_sefa
 
-    # Skrytí nahrávacího boxu po úspěšném prvním uložení
     if df_klienti is not None and not st.session_state["zmena_databaze"]:
         st.success(t["db_loaded_ok"])
         if st.button(t["db_change_btn"]):
@@ -256,7 +254,7 @@ def vykresli_aplikaci():
             if box_vyber != t["select_prompt"]:
                 idx = seznam_moznosti.index(box_vyber) - 1
                 vybrany_klient = vysledky_hledani.iloc[idx].tolist()
-                klient_cisty_nazev = str(vybrany_klient[0]) if len(vybrany_klient) > 0 else "Klient"
+                klient_cisty_nazev = str(vybrany_klient) if len(vybrany_klient) > 0 else "Klient"
                 st.success(f"{t['selected_ok']} {vybrany_klient}")
         else:
             st.error(t["no_client"])
@@ -271,7 +269,18 @@ def vykresli_aplikaci():
     with col_z3: m_basil = st.checkbox("BASIL")
     with col_z4: m_rozzo = st.checkbox("ROZZO")
     
-    txt_sleva = st.text_input(t["discount_lbl"], value="")
+    zapisane_slevy = {}
+    
+    if m_bbb:
+        zapisane_slevy["BBB"] = st.text_input("Slíbená sleva na BBB (%):", value="", key="sleva_bbb_input")
+    if m_cyclon:
+        zapisane_slevy["CYCLON"] = st.text_input("Slíbená sleva na CYCLON (%):", value="", key="sleva_cyclon_input")
+    if m_basil:
+        zapisane_slevy["BASIL"] = st.text_input("Slíbená sleva na BASIL (%):", value="", key="sleva_basil_input")
+    if m_rozzo:
+        zapisane_slevy["ROZZO"] = st.text_input("Slíbená sleva na ROZZO (%):", value="", key="sleva_rozzo_input")
+        
+    st.write("") 
     txt_konkurence = st.text_input(t["competitor_lbl"], value="")
     txt_potencial = st.text_input(t["potential_lbl"], value="")
 
@@ -291,7 +300,6 @@ def vykresli_aplikaci():
 
     st.write("---")
     
-    # Příprava stavu pro zobrazení tlačítek odeslání po uložení
     if "posledni_report" not in st.session_state:
         st.session_state["posledni_report"] = ""
     if "posledni_klient" not in st.session_state:
@@ -304,13 +312,20 @@ def vykresli_aplikaci():
             sit_seznam = []
             if ch_b2b: sit_seznam.append("Bude zaslán přístup na B2B")
             if ch_zajem: sit_seznam.append("Nemá zájem - bere od jiných")
+            
             zvolene_znacky = [z for z, c in [("BBB", m_bbb), ("CYCLON", m_cyclon), ("BASIL", m_basil), ("ROZZO", m_rozzo)] if c]
             if zvolene_znacky: 
                 sit_seznam.insert(0, f"Předvedeny vzorky ({', '.join(zvolene_znacky)})")
             
+            slevy_vystup_list = []
+            for znacka, hodnota in zapisane_slevy.items():
+                if hodnota.strip():
+                    slevy_vystup_list.append(f"{znacka}: {hodnota} %")
+            sleva_string = ", ".join(slevy_vystup_list) if slevy_vystup_list else "Není"
+            
             slevy_objekt = {
                 "situace": ", ".join(sit_seznam) if sit_seznam else "Žádná specifická situace",
-                "sleva": f"{txt_sleva} %" if txt_sleva else "Není",
+                "sleva": sleva_string,
                 "konkurence": txt_konkurence if txt_konkurence else "Nezadáno",
                 "potencial": f"{txt_potencial} %" if txt_potencial else "Nezadáno"
             }
@@ -325,25 +340,21 @@ def vykresli_aplikaci():
                 st.success(t["save_success"])
                 st.rerun()
 
-    # ✉️ 🟢 NOVINKA: Pokud je schůzka zapsaná, ukážeme velká mobilní tlačítka pro bleskové odeslání
     if st.session_state["posledni_report"]:
         st.subheader("✉️ Odeslat hotový report z mobilu:")
         
-        # Bezpečné kódování textu do URL formátu pro telefonní aplikace
         text_pro_url = urllib.parse.quote(st.session_state["posledni_report"])
         predmet_pro_url = urllib.parse.quote(f"RouteReport: {st.session_state['posledni_klient']}")
         boss_email_adr = st.session_state.get("boss_email", "")
         
         col_send1, col_send2 = st.columns(2)
         with col_send1:
-            # Tlačítko na E-mail: Otevře výchozí mailovou aplikaci telefonu (předvyplní šéfa, předmět i text)
             mail_odkaz = f"mailto:{boss_email_adr}?subject={predmet_pro_url}&body={text_pro_url}"
-            st.markdown(f'<a href="{mail_odkaz}" target="_blank" style="text-decoration:none;"><button style="width:100%; height:45px; background-color:#4CAF50; color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">✉️ ODESLAT E-MAILEM</button></a>', unsafe_allow_width=True, unsafe_allow_html=True)
+            st.markdown(f'<a href="{mail_odkaz}" target="_blank" style="text-decoration:none;"><button style="width:100%; height:45px; background-color:#4CAF50; color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">✉️ ODESLAT E-MAILEM</button></a>', unsafe_allow_html=True)
             
         with col_send2:
-            # Tlačítko na WhatsApp: Otevře WhatsApp v mobilu a rovnou do chatu připraví zformátovaný text schůzky
             wa_odkaz = f"https://whatsapp.com{text_pro_url}"
-            st.markdown(f'<a href="{wa_odkaz}" target="_blank" style="text-decoration:none;"><button style="width:100%; height:45px; background-color:#00E676; color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">💬 POSLAT PŘES WHATSAPP</button></a>', unsafe_allow_width=True, unsafe_allow_html=True)
+            st.markdown(f'<a href="{wa_odkaz}" target="_blank" style="text-decoration:none;"><button style="width:100%; height:45px; background-color:#00E676; color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">💬 POSLAT PŘES WHATSAPP</button></a>', unsafe_allow_html=True)
 
         st.subheader(t["copy_title"])
         st.code(st.session_state["posledni_report"])
@@ -355,8 +366,22 @@ def vykresli_aplikaci():
     if os.path.exists(HISTORIE_SOUBOR):
         try:
             df_hist = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
-            df_zobrazeni = df_hist.iloc[::-1]
-            st.dataframe(df_zobrazeni, use_container_width=True, hide_index=True)
+            
+            # Zobrazení tabulky s indexem (číslem řádku), aby uživatel věděl, co mazat
+            df_zobrazeni = df_hist.copy()
+            df_zobrazeni.index = df_zobrazeni.index + 1 # Zobrazení indexu od 1 místo od 0
+            df_zobrazeni = df_zobrazeni.iloc[::-1]
+            st.dataframe(df_zobrazeni, use_container_width=True)
+            
+            # 🟢 NOVINKA: Čistá mobilní sekce pro smazání chybného řádku
+            with st.expander("🗑️ Smazat chybný řádek z historie"):
+                radek_ke_smaza = st.number_input("Zadejte číslo řádku ke smazání (podle tabulky):", min_value=1, max_value=len(df_hist), step=1)
+                if st.button("❌ Definitivně smazat tento řádek", use_container_width=True):
+                    # Odstraníme řádek (převod z indexu od 1 zpět na index od 0)
+                    df_upraveny = df_hist.drop(df_hist.index[radek_ke_smaza - 1])
+                    df_upraveny.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
+                    st.success(f"Řádek {radek_ke_smaza} byl smazán!")
+                    st.rerun()
             
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
