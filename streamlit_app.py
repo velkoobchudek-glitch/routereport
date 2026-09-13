@@ -37,7 +37,7 @@ LANG = {
         "time_lbl": "Čas návštěvy:",
         "duration_lbl": "Trvání schůzky:",
         "sec_2": "2. Vyhledat a vybrat klienta",
-        "search_hint": "Začněte psát jméno klienta nebo město (bez háčků a čárek)...",
+        "search_hint": "Zadejte jméno klienta nebo město (bez háčků a čárek)...",
         "select_prompt": "-- Klikněte pro výběr klienta --",
         "selected_ok": "🤝 Vybráno pro zápis:",
         "no_client": "❌ Žádný klient neodpovídá zadání.",
@@ -236,35 +236,43 @@ def vykresli_aplikaci():
     vybrany_klient = None
     klient_cisty_nazev = "Klient"
     
-    seznam_moznosti = [t["select_prompt"]]
-    vysledky_mapovani = {}
-    
     if hledat:
         hledat_ciste = odstran_diakritiku(hledat).lower()
         shoduje_se = df_klienti.apply(
             lambda row: hledat_ciste in odstran_diakritiku(row.astype(str).str.lower().str.cat(sep=' ')), 
             axis=1
         )
-        vysledky_hledani = df_klienti[shoduje_se].head(30)
+        vysledky_hledani = df_klienti[shoduje_se]
+        pocet_shod = len(vysledky_hledani)
         
-        for _, row in vysledky_hledani.iterrows():
-            krasny_nazev = " | ".join([str(row.iloc[i]) for i in range(min(len(row), 4)) if row.iloc[i]])
-            seznam_moznosti.append(krasny_nazev)
-            vysledky_mapovani[krasny_nazev] = row.tolist()
+        # 🎯 NOVINKA: Pokud existuje přesně JEDNA shoda (např. "necas"), ROVNOU klienta vybereme a schováme selectbox
+        if pocet_shod == 1:
+            radek = vysledky_hledani.iloc[0]
+            vybrany_klient = radek.tolist()
+            krasny_nazev = " | ".join([str(radek.iloc[i]) for i in range(min(len(radek), 4)) if radek.iloc[i]])
+            klient_cisty_nazev = krasny_nazev
+            st.success(f"🎯 Automaticky vybrán jediný nalezený klient: {krasny_nazev}")
+            
+        elif pocet_shod > 1:
+            # Pokud je nalezeno více klientů (např. město Pardubice), ukážeme standardní čistý výběr
+            seznam_moznosti = [t["select_prompt"]]
+            vysledky_mapovani = {}
+            
+            for _, row in vysledky_hledani.head(30).iterrows():
+                krasny_nazev = " | ".join([str(row.iloc[i]) for i in range(min(len(row), 4)) if row.iloc[i]])
+                seznam_moznosti.append(krasny_nazev)
+                vysledky_mapovani[krasny_nazev] = row.tolist()
+                
+            box_vyber = st.selectbox("🤝 Vyberte klienta:", seznam_moznosti, label_visibility="collapsed")
+            if box_vyber != t["select_prompt"] and box_vyber in vysledky_mapovani:
+                vybrany_klient = vysledky_mapovani[box_vyber]
+                klient_cisty_nazev = box_vyber
+                st.success(f"{t['selected_ok']} {box_vyber}")
+        else:
+            st.error(t["no_client"])
     else:
-        for _, row in df_klienti.head(15).iterrows():
-            krasny_nazev = " | ".join([str(row.iloc[i]) for i in range(min(len(row), 4)) if row.iloc[i]])
-            seznam_moznosti.append(krasny_nazev)
-            vysledky_mapovani[krasny_nazev] = row.tolist()
-
-    box_vyber = st.selectbox("🤝 Vyberte klienta:", seznam_moznosti, label_visibility="collapsed")
-    
-    if box_vyber != t["select_prompt"] and box_vyber in vysledky_mapovani:
-        vybrany_klient = vysledky_mapovani[box_vyber]
-        klient_cisty_nazev = str(vybrany_klient) if len(vybrany_klient) > 0 else "Klient"
-        st.success(f"{t['selected_ok']} {box_vyber}")
-    elif hledat and len(seznam_moznosti) == 1:
-        st.error(t["no_client"])
+        # Pokud uživatel nepíše, rozevírací seznam je schovaný a čeká se na text, šetříme místo
+        st.caption("Aplikace čeká na zadání textu pro bleskový vyhledávací filtr.")
     st.subheader(t["sec_3"])
     ch_b2b = st.checkbox(t["b2b_lbl"])
     ch_zajem = st.checkbox(t["no_interest"])
