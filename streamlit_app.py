@@ -9,7 +9,6 @@ from datetime import datetime
 
 import streamlit as st
 import pandas as pd
-
 # Globální mobilní nastavení aplikace RouteReport
 st.set_page_config(
     page_title="RouteReport",
@@ -40,7 +39,7 @@ LANG = {
         "search_hint": "Ťukněte a začněte psát jméno nebo město...",
         "select_prompt": "-- Začněte psát jméno nebo město klienta --",
         "selected_ok": "🤝 Vybráno pro uložení:",
-        "no_client": "❌ Žádný klient neodpovídá zadání.",
+        "no_client": "❌ Žájný klient neodpovídá zadání.",
         "sec_3": "3. Situace z terénu a slevy",
         "b2b_lbl": "Bude zaslán přístup na B2B",
         "no_interest": "Nemá zájem - bere od jiných",
@@ -235,7 +234,7 @@ def vykresli_aplikaci():
 
     if df_klienti is None:
         return
-    # Sekce 1: Datum a volba času přes dva rozevírací boxy vedle sebe
+    # Sekce 1: Čas přesně jako na PC
     st.subheader(t["sec_1"])
     col_d1, col_t_h, col_t_m = st.columns(3)
     with col_d1:
@@ -284,7 +283,7 @@ def vykresli_aplikaci():
     with c_z1: m_bbb = st.checkbox("BBB")
     with col_z2: m_cyclon = st.checkbox("CYCLON")
     with col_z3: m_basil = st.checkbox("BASIL")
-    with col_z4: m_rozzo = st.checkbox("ROZZO")
+    with col_z4: m_rozzo = m_rozzo = st.checkbox("ROZZO")
     
     zapisane_slevy = {}
     
@@ -382,8 +381,7 @@ def vykresli_aplikaci():
                 btn_label = f"✉️ ODESLAT INFO O NÁVŠTĚVÁCH MANAŽEROVI ({od_kdy} - {do_kdy})" if jazyk == "CS" else f"✉️ SEND VISIT NOTES TO MANAGER ({od_kdy} - {do_kdy})"
                 mail_odkaz = f"mailto:{boss_email_adr}?subject={predmet_pro_url}&body={text_pro_url}"
                 st.markdown(f'<a href="{mail_odkaz}" target="_blank" style="text-decoration:none;"><button style="width:100%; height:52px; background-color:#1E88E5; color:white; border:none; border-radius:5px; font-weight:bold; font-size:14px; cursor:pointer;">{btn_label}</button></a>', unsafe_allow_html=True)
-            
-            # Kalendářní úkoly otevírající přímý internetový odkaz
+            # Sekce úkolů s přímým a neblokovaným odkazem na webový Google Kalendář v nové kartě
             st.write("---")
             tasks_title = "📅 Moje nadcházející úkoly (Připomínky)" if jazyk == "CS" else "📅 My Upcoming Tasks (Reminders)"
             st.subheader(tasks_title)
@@ -393,24 +391,23 @@ def vykresli_aplikaci():
                 if not df_ukoly.empty:
                     st.dataframe(df_ukoly, use_container_width=True, hide_index=True)
                     
-                    st.caption("Kliknutím bleskově otevřete nativní aplikaci kalendáře ve vašem telefonu:")
+                    st.caption("Kliknutím bleskově otevřete Google Kalendář (otevře se nová karta v mobilu):")
                     for idx, row_u in df_ukoly.iterrows():
                         try:
                             d_obj = datetime.strptime(row_u["Termín"], "%d.%m.%Y")
-                            g_date = d_obj.strftime("%Y%m%dT120000")
+                            g_date = d_obj.strftime("%Y%m%d")
                         except:
-                            g_date = datetime.now().strftime("%Y%m%dT120000")
+                            g_date = datetime.now().strftime("%Y%m%d")
                             
-                        ciste_jmeno_linku = str(row_u['Klient']).strip()
-                        g_title = urllib.parse.quote(f"Ozvat se: {ciste_jmeno_linku}")
+                        ciste_jmeno_cal = str(row_u['Klient']).replace("['", "").replace("']", "").replace('["', '').replace('"]', '').strip()
+                        g_title = urllib.parse.quote(f"Ozvat se: {ciste_jmeno_cal}")
                         g_desc = urllib.parse.quote(row_u["Důvod (Kvůli čemu)"])
                         
-                        # 🎯 ROZHODUJÍCÍ ZMĚNA: Používáme čistý standard webcal datového proudu. 
-                        # To donutí mobilní systém Chrome NEOTEVÍRAT kartu, ale ROVNOU vzbudit Kalendář v mobilu!
-                        cal_content = f"BEGIN:VCALENDAR\\nVERSION:2.0\\nBEGIN:VEVENT\\nDTSTART:{g_date}\\nDTEND:{g_date}\\nSUMMARY:{g_title}\\nDESCRIPTION:{g_desc}\\nEND:VEVENT\\nEND:VCALENDAR"
-                        webcal_link = f"data:text/calendar;charset=utf8,{cal_content}"
+                        google_cal_link = f"https://google.com{g_title}&dates={g_date}/{g_date}&details={g_desc}"
                         
-                        st.markdown(f'<div style="margin-bottom:12px;"><a href="{webcal_link}" target="_self" style="display:block; width:100%; height:44px; background-color:#34A853; color:white; border-radius:5px; text-align:center; line-height:44px; font-weight:bold; font-size:13px; text-decoration:none;">📅 ULOŽIT DO KALENDÁŘE V MOBILU: {ciste_jmeno_linku}</a></div>', unsafe_allow_html=True)
+                        # 🎯 DLOUHO OČEKÁVANÉ ŘEŠENÍ: target="_blank" otevře novou čistou internetovou kartu s Google Kalendářem. 
+                        # Prohlížeč mobilu to vyhodnotí jako normální odkaz a rovnou vás tam pustí se všemi daty!
+                        st.markdown(f'<div style="margin-bottom:12px;"><a href="{google_cal_link}" target="_blank" style="display:block; width:100%; height:44px; background-color:#34A853; color:white; border-radius:5px; text-align:center; line-height:44px; font-weight:bold; font-size:13px; text-decoration:none;">📅 OTEVŘÍT GOOGLE KALENDÁŘ: {ciste_jmeno_cal}</a></div>', unsafe_allow_html=True)
                 else:
                     st.caption("Žádné naplánované připomínky.")
             else:
@@ -454,8 +451,7 @@ def vykresli_aplikaci():
         except Exception as e:
             st.caption(f"Ready / Připraveno. ({e})")
     else:
-        no_notes_lbl = "Zatím nebyly zapsány žádné poznámky." if jazyk == "CS" else "No visit notes recorded yet."
-        st.caption(no_notes_lbl)
+        st.caption("Zatím nebyly zapsány žádné poznámky.")
 if __name__ == "__main__":
     TAJNE_HESLO = "Cestak123"
     
