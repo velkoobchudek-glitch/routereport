@@ -50,7 +50,7 @@ LANG = {
         "note_lbl": "Napište průběh jednání nebo výsledek návštěvy:",
         "remind_check": "🔔 Naplánovat termín příštího kontaktu / ozvání (Vnitřní připomínka)",
         "remind_date": "Kdy se ozvat znovu:",
-        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVĚ",
+        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVÊ",
         "save_success": "✅ Info o návštěvě úspěšně uloženo do deníku na pozadí!",
         "copy_title": "📋 Text ke zkopírování (pokud potřebujete):",
         "out_date": "📅 DATUM A ČAS",
@@ -117,11 +117,9 @@ def zpracuj_a_ulož_soubor(uploaded_file):
     try:
         bytes_data = uploaded_file.read()
         try:
-            # Pokus 1: Moderní kódování UTF-8
             text_data = bytes_data.decode("utf-8")
             df = pd.read_csv(io.StringIO(text_data), sep=None, engine='python', dtype=str)
         except UnicodeDecodeError:
-            # Pokus 2: Automatická záchrana pro český Excel (Windows-1250)
             text_data = bytes_data.decode("cp1250", errors="replace")
             df = pd.read_csv(io.StringIO(text_data), sep=None, engine='python', dtype=str)
             
@@ -144,13 +142,22 @@ def nacti_trvale_ulozeny_adresar():
 def zapis_zaznam_na_disk(klient_radek, datum, cas_text, trvani, ozvat_se, slevy_data, poznamka, jazyk):
     oddelovac = "=" * 45
     t = LANG[jazyk]
-    # Zvýšeno na 6 sloupečků pro správné načtení nového Jména dodacího
     klient_vystup = " | ".join([str(x) for x in klient_radek[:6] if x])
     
-    klient_ciste_jmeno = "Klient"
-    if len(klient_radek) > 0:
-        klient_ciste_jmeno = str(klient_radek).replace("['", "").replace("']", "").replace('["', '').replace('"]', '').strip()
+    # 🟢 AKTUALIZOVÁNO: Uložíme čisté jméno, telefon a email jako samostatné položky, aby šly proklikat
+    ciste_jmeno = str(klient_radek[0]).strip() if len(klient_radek) > 0 else "Klient"
     
+    # Pokusíme se v políčkách najít telefon a email (hledáme podle zavináče a délky čísel v řádku)
+    cisty_tel = ""
+    cisty_mail = ""
+    for policko in [str(x).strip() for x in klient_radek]:
+        if "@" in policko:
+            cisty_mail = policko
+        elif policko.isdigit() and len(policko) >= 9:
+            cisty_tel = policko
+        elif ("+" in policko) and len(policko) >= 10:
+            cisty_tel = policko
+            
     blok_textu = (
         f"{oddelovac}\n"
         f"{t['out_date']}: {datum.strftime('%d.%m.%Y')} v {cas_text}\n"
@@ -191,7 +198,9 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas_text, trvani, ozvat_se, slevy_
             duvod_kontaktu = f"Slevy: {slevy_data['sleva']}. Poznámka: {poznamka if poznamka else 'Kontrola stavu.'}"
             novy_ukol = {
                 "Termín": ozvat_se.strftime('%d.%m.%Y'),
-                "Klient": klient_ciste_jmeno,
+                "Klient": ciste_jmeno,
+                "Telefon": cisty_tel,
+                "Email": cisty_mail,
                 "Důvod (Kvůli čemu)": duvod_kontaktu
             }
             df_ukol = pd.DataFrame([novy_ukol])
@@ -212,7 +221,6 @@ def vykresli_aplikaci():
     t = LANG[jazyk]
     st.title(t["title"])
     
-    # 🔔 Vnitřní automatické vyskakovací okno pro ranní kontrolu úkolů
     if os.path.exists(UKOLY_SOUBOR):
         try:
             df_kontrol_u = pd.read_csv(UKOLY_SOUBOR, dtype=str)
@@ -280,7 +288,7 @@ def vykresli_aplikaci():
         
     cas_vystup_text = f"{zvolena_hodina}:{zvolen_minuta}"
 
-    # Sekce 2: Hledání a výběr klienta (Rozšířeno na 6 polí pro Jméno dodací)
+    # Sekce 2: Hledání a výběr klienta (Zobrazení rozšířeno na 6 polí)
     st.subheader(t["sec_2"])
     
     seznam_zakazniku = []
@@ -397,7 +405,7 @@ def vykresli_aplikaci():
             st.caption(f"Ready / Připraveno. ({e})")
     # Vnitřní nezávislý kalendář přímo na obrazovce
     st.write("---")
-    tasks_title = "📅 Moje nadcházející úkoly (Připomínky)" if "tasks_title" in locals() else "📅 Moje nadcházející úkoly (Připomínky)"
+    tasks_title = "📅 Moje nadcházející úkoly (Připomínky)"
     st.subheader(tasks_title)
     if os.path.exists(UKOLY_SOUBOR):
         try:
@@ -414,8 +422,25 @@ def vykresli_aplikaci():
                         
                     with st.container(border=True):
                         st.markdown(f"**Status: {status_badge}**")
+                        # 🟢 KLIČOVÁ OPRAVA: Zobrazuje se pouze čistý název firmy bez ošklivých adres a nan polí
                         st.markdown(f"📅 **Kdy:** {row_u['Termín']} | 🏢 **Klient:** {row_u['Klient']}")
                         st.markdown(f"📝 **Důvod:** {row_u['Důvod (Kvůli čemu)']}")
+                        
+                        # 📞 CHYTRÉ VOLÁNÍ A E-MAIL: Pokud jsou v kartě uloženy, vytvoří se přímá proklikávací akce pro Samsung
+                        col_c1, col_c2 = st.columns(2)
+                        
+                        # Ověříme, zda sloupec vůbec existuje a zda není prázdný
+                        tel_val = str(row_u['Telefon']).strip() if 'Telefon' in row_u and pd.notna(row_u['Telefon']) else ""
+                        mail_val = str(row_u['Email']).strip() if 'Email' in row_u and pd.notna(row_u['Email']) else ""
+                        
+                        with col_c1:
+                            if tel_val and tel_val != "nan" and tel_val != "":
+                                st.markdown(f'<a href="tel:{tel_val}" style="text-decoration:none;"><button style="width:100%; height:36px; background-color:#2E7D32; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">📞 ZAVOLAT: {tel_val}</button></a>', unsafe_allow_html=True)
+                        with col_c2:
+                            if mail_val and mail_val != "nan" and mail_val != "":
+                                st.markdown(f'<a href="mailto:{mail_val}" style="text-decoration:none;"><button style="width:100%; height:36px; background-color:#1565C0; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">✉️ NAPÍSAT E-MAIL</button></a>', unsafe_allow_html=True)
+                        
+                        st.write("")
                         if st.button(f"✅ Vyřízeno (Smazat připomínku)", key=f"del_task_btn_{idx}", use_container_width=True):
                             df_upraveny_ukoly = df_ukoly.drop(df_ukoly.index[idx])
                             df_upraveny_ukoly.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
