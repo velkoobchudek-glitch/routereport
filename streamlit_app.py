@@ -7,7 +7,7 @@ import urllib.parse
 import unicodedata
 from datetime import datetime
 
-import streamlit st
+import streamlit as st
 import pandas as pd
 # Globální mobilní nastavení aplikace RouteReport
 st.set_page_config(
@@ -274,33 +274,35 @@ def vykresli_aplikaci():
 
     if df_klienti is None:
         return
-    # Sekce 1: Čas vytahovaný dynamicky přímo ze systému vašeho mobilu
+    # Sekce 1: Čas na základě aktuálního reálného času v telefonu
     st.subheader(t["sec_1"])
     col_d1, col_t_h, col_t_m = st.columns(3)
-    
-    # Získání aktuální hodiny a minuty z telefonu
-    nyni = datetime.now()
-    aktualni_hodina = nyni.strftime("%H")
-    # Zaokrouhlení minut na nejbližší pětiminutu pro náš zjednodušený seznam
-    minuty_zaokrouhlene = f"{(nyni.minute // 5) * 5:02d}"
-    
     with col_d1:
         datum_sch = st.date_input(t["date_lbl"], datetime.now())
         
+    # Načteme aktuální hodinu a minutu ze systému Samsungu
+    nyni = datetime.now()
+    aktualni_hodina = f"{nyni.hour:02d}"
+    
+    # Minuty inteligentně zaokrouhlíme na nejbližších 5 minut pro čistýPC styl
+    zaokrouhlene_minuty = int(5 * round(nyni.minute / 5))
+    if zaokrouhlene_minuty >= 60: zaokrouhlene_minuty = 55
+    aktualni_minuta = f"{zaokrouhlene_minuty:02d}"
+
     with col_t_h:
         hodiny_list = [f"{i:02d}" for i in range(24)]
-        # Pokud je aktuální hodina v seznamu, skočíme na ni jako na výchozí index
-        index_hodiny = hodiny_list.index(aktualni_hodina) if aktualni_hodina in hodiny_list else 12
-        zvolena_hodina = st.selectbox("Hodina:", hodiny_list, index=index_hodiny)
+        # Pokud aktuální hodina existuje v seznamu, rovnou ji předvybereme jako výchozí
+        idx_h = hodiny_list.index(aktualni_hodina) if aktualni_hodina in hodiny_list else 12
+        zvolena_hodina = st.selectbox("Hodina:", hodiny_list, index=idx_h)
         
     with col_t_m:
         minuty_list = [f"{i:02d}" for i in range(0, 60, 5)]
-        index_minuty = minuty_list.index(minuty_zaokrouhlene) if minuty_zaokrouhlene in minuty_list else 0
-        zvolen_minuta = st.selectbox("Minuta:", minuty_list, index=index_minuty)
+        idx_m = minuty_list.index(aktualni_minuta) if aktualni_minuta in minuty_list else 0
+        zvolen_minuta = st.selectbox("Minuta:", minuty_list, index=idx_m)
         
     cas_vystup_text = f"{zvolena_hodina}:{zvolen_minuta}"
 
-    # Sekce 2: Hledání a výběr klienta (Zobrazení rozšířeno na 6 polí)
+    # Sekce 2: Hledání a výběr klienta
     st.subheader(t["sec_2"])
     
     seznam_zakazniku = []
@@ -372,7 +374,7 @@ def vykresli_aplikaci():
             sleva_string = ", ".join(slevy_vystup_list) if slevy_vystup_list else "Není"
             
             slevy_objekt = {
-                "situace": ", ".join(sit_seznam) if sit_seznam else "Žádná specifická situace",
+                "situace": ", ".join(sit_seznam) if sit_seznam else "Žádná specifická situation",
                 "sleva": sleva_string,
                 "konkurence": txt_konkurence if txt_konkurence else "Nezadáno",
                 "potencial": f"{txt_potencial} %" if txt_potencial else "Nezadáno"
@@ -416,6 +418,75 @@ def vykresli_aplikaci():
                 st.markdown(f'<a href="{mail_odkaz}" target="_blank" style="text-decoration:none;"><button style="width:100%; height:52px; background-color:#1E88E5; color:white; border:none; border-radius:5px; font-weight:bold; font-size:14px; cursor:pointer;">{btn_label}</button></a>', unsafe_allow_html=True)
         except Exception as e:
             st.caption(f"Ready / Připraveno. ({e})")
+    # Vnitřní nezávislý kalendář přímo na obrazovce
+    st.write("---")
+    tasks_title = "📅 Moje nadcházející úkoly (Připomínky)"
+    st.subheader(tasks_title)
+    if os.path.exists(UKOLY_SOUBOR):
+        try:
+            df_ukoly = pd.read_csv(UKOLY_SOUBOR, dtype=str)
+            if not df_ukoly.empty:
+                dnesni_datum = datetime.now().date()
+                for idx, row_u in df_ukoly.iterrows():
+                    try:
+                        t_date = datetime.strptime(row_u["Termín"], "%d.%m.%Y").date()
+                        dny_rozdil = (t_date - dnesni_datum).days
+                        status_badge = "🔴 DNES HOŘÍ / PROŠLÉ!" if dny_rozdil < 0 else ("⚠️ Blíží se (Akutní)" if dny_rozdil <= 2 else "🟢 V plánu")
+                    except:
+                        status_badge = "🟢 V plánu"
+                        
+                    with st.container(border=True):
+                        st.markdown(f"**Status: {status_badge}**")
+                        st.markdown(f"📅 **Kdy:** {row_u['Termín']} | 🏢 **Klient:** {row_u['Klient']}")
+                        st.markdown(f"📝 **Důvod:** {row_u['Důvod (Kvůli čemu)']}")
+                        
+                        col_c1, col_c2 = st.columns(2)
+                        tel_val = str(row_u['Telefon']).strip() if 'Telefon' in row_u and pd.notna(row_u['Telefon']) else ""
+                        mail_val = str(row_u['Email']).strip() if 'Email' in row_u and pd.notna(row_u['Email']) else ""
+                        
+                        with col_c1:
+                            if tel_val and tel_val != "nan" and tel_val != "":
+                                st.markdown(f'<a href="tel:{tel_val}" style="text-decoration:none;"><button style="width:100%; height:36px; background-color:#2E7D32; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">📞 ZAVOLAT: {tel_val}</button></a>', unsafe_allow_html=True)
+                        with col_c2:
+                            if mail_val and mail_val != "nan" and mail_val != "":
+                                st.markdown(f'<a href="mailto:{mail_val}" style="text-decoration:none;"><button style="width:100%; height:36px; background-color:#1565C0; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">✉️ NAPÍSAT E-MAIL</button></a>', unsafe_allow_html=True)
+                        
+                        st.write("")
+                        if st.button(f"✅ Vyřízeno (Smazat připomínku)", key=f"del_task_btn_{idx}", use_container_width=True):
+                            df_upraveny_ukoly = df_ukoly.drop(df_ukoly.index[idx])
+                            df_upraveny_ukoly.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
+                            st.success("Úkol úspěšně vyřízen!")
+                            st.rerun()
+            else: st.caption("Nemáte žádné naplánované připomínky.")
+        except: st.caption("Nemáte žádné naplánované připomínky.")
+    else: st.caption("Nemáte žádné naplánované připomínky.")
+
+    st.write("---")
+    with st.expander("🗑️ Správa databáze a čistění"):
+        if os.path.exists(HISTORIE_SOUBOR):
+            df_hist = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
+            row_lbl = "Zadejte číslo řádku ke smazání z deníku:" if jazyk == "CS" else "Enter row number to delete from log:"
+            radek_ke_smaza = st.number_input(row_lbl, min_value=1, max_value=len(df_hist), step=1)
+            if st.button("❌ Smazat tento řádek z deníku", use_container_width=True):
+                df_upraveny = df_hist.drop(df_hist.index[radek_ke_smaza - 1])
+                df_upraveny.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
+                st.success("Smazáno!")
+                st.rerun()
+            
+        if st.button("🚨 VYČISTIT ÚPLNĚ VŠE (Deník i Připomínky)", use_container_width=True):
+            if os.path.exists(HISTORIE_SOUBOR): os.remove(HISTORIE_SOUBOR)
+            if os.path.exists(EXPORT_FILE): os.remove(EXPORT_FILE)
+            if os.path.exists(UKOLY_SOUBOR): os.remove(UKOLY_SOUBOR)
+            st.success("Vše kompletně vyčištěno!")
+            st.rerun()
+    
+    if os.path.exists(HISTORIE_SOUBOR):
+        df_hist = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
+        xl_btn_lbl = "📥 Stáhnout deník jako záložní CSV soubor (.csv)" if jazyk == "CS" else "📥 Download log as backup CSV file (.csv)"
+        csv_buffer = df_hist.copy()
+        if "RawText_Zaloha" in csv_buffer.columns: csv_buffer = csv_buffer.drop(columns=["RawText_Zaloha"])
+        csv_data_data = csv_buffer.to_csv(index=False, encoding="utf-8")
+        st.download_button(label=xl_btn_lbl, data=csv_data_data, file_name=f"routereport_export.csv", mime="text/csv", use_container_width=True)
 if __name__ == "__main__":
     TAJNE_HESLO = "Cestak123"
     
