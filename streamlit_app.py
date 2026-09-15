@@ -50,7 +50,7 @@ LANG = {
         "note_lbl": "Napište průběh jednání nebo výsledek návštěvy:",
         "remind_check": "🔔 Naplánovat termín příštího kontaktu / ozvání (Vnitřní připomínka)",
         "remind_date": "Kdy se ozvat znovu:",
-        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVÊ",
+        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVĚ",
         "save_success": "✅ Info o návštěvě úspěšně uloženo do deníku na pozadí!",
         "copy_title": "📋 Text ke zkopírování (pokud potřebujete):",
         "out_date": "📅 DATUM A ČAS",
@@ -144,10 +144,10 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas_text, trvani, ozvat_se, slevy_
     t = LANG[jazyk]
     klient_vystup = " | ".join([str(x) for x in klient_radek[:6] if x])
     
-    # 🟢 AKTUALIZOVÁNO: Uložíme čisté jméno, telefon a email jako samostatné položky, aby šly proklikat
-    ciste_jmeno = str(klient_radek[0]).strip() if len(klient_radek) > 0 else "Klient"
+    ciste_jmeno = "Klient"
+    if len(klient_radek) > 0:
+        ciste_jmeno = str(klient_radek[0]).strip()
     
-    # Pokusíme se v políčkách najít telefon a email (hledáme podle zavináče a délky čísel v řádku)
     cisty_tel = ""
     cisty_mail = ""
     for policko in [str(x).strip() for x in klient_radek]:
@@ -288,7 +288,7 @@ def vykresli_aplikaci():
         
     cas_vystup_text = f"{zvolena_hodina}:{zvolen_minuta}"
 
-    # Sekce 2: Hledání a výběr klienta (Zobrazení rozšířeno na 6 polí)
+    # Sekce 2: Hledání a výběr klienta (Zobrazení rozšířeno na 6 polí pro Jméno dodací)
     st.subheader(t["sec_2"])
     
     seznam_zakazniku = []
@@ -422,14 +422,10 @@ def vykresli_aplikaci():
                         
                     with st.container(border=True):
                         st.markdown(f"**Status: {status_badge}**")
-                        # 🟢 KLIČOVÁ OPRAVA: Zobrazuje se pouze čistý název firmy bez ošklivých adres a nan polí
                         st.markdown(f"📅 **Kdy:** {row_u['Termín']} | 🏢 **Klient:** {row_u['Klient']}")
                         st.markdown(f"📝 **Důvod:** {row_u['Důvod (Kvůli čemu)']}")
                         
-                        # 📞 CHYTRÉ VOLÁNÍ A E-MAIL: Pokud jsou v kartě uloženy, vytvoří se přímá proklikávací akce pro Samsung
                         col_c1, col_c2 = st.columns(2)
-                        
-                        # Ověříme, zda sloupec vůbec existuje a zda není prázdný
                         tel_val = str(row_u['Telefon']).strip() if 'Telefon' in row_u and pd.notna(row_u['Telefon']) else ""
                         mail_val = str(row_u['Email']).strip() if 'Email' in row_u and pd.notna(row_u['Email']) else ""
                         
