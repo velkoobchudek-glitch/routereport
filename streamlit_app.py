@@ -288,7 +288,7 @@ def vykresli_aplikaci():
         
     cas_vystup_text = f"{zvolena_hodina}:{zvolen_minuta}"
 
-    # Sekce 2: Hledání a výběr klienta (Zobrazení rozšířeno na 6 polí pro Jméno dodací)
+    # Sekce 2: Hledání a výběr klienta (Rozšířeno na 6 polí)
     st.subheader(t["sec_2"])
     
     seznam_zakazniku = []
@@ -358,6 +358,7 @@ def vykresli_aplikaci():
             for znacka, hodnota in zapisane_slevy.items():
                 if hodnota.strip(): slevy_vystup_list.append(f"{znacka}: {hodnota} %")
             sleva_string = ", ".join(slevy_vystup_list) if slevy_vystup_list else "Není"
+            
             slevy_objekt = {
                 "situace": ", ".join(sit_seznam) if sit_seznam else "Žádná specifická situace",
                 "sleva": sleva_string,
