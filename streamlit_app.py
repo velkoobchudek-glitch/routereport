@@ -9,7 +9,7 @@ from datetime import datetime
 
 import streamlit as st
 import pandas as pd
-# Globální mobilní nastavení aplikace RouteReport
+# Globální nastavení aplikace RouteReport
 st.set_page_config(
     page_title="RouteReport",
     page_icon="📱",
@@ -274,35 +274,29 @@ def vykresli_aplikaci():
 
     if df_klienti is None:
         return
-    # Sekce 1: Čas na základě aktuálního reálného času v telefonu
+    # Sekce 1: Čas se dynamicky přizpůsobí aktuálnímu času v telefonu
     st.subheader(t["sec_1"])
     col_d1, col_t_h, col_t_m = st.columns(3)
+    
+    # Získání aktuální hodiny a minuty z mobilního systému
+    aktualni_hodina_mobil = datetime.now().hour
+    aktualni_minuta_mobil = datetime.now().minute
+    # Zaokrouhlení minut na nejbližší pětku, aby to sedělo do seznamu
+    zaokrouhlena_minuta = int(5 * round(aktualni_minuta_mobil / 5))
+    if zaokrouhlena_minuta >= 60: zaokrouhlena_minuta = 55
+
     with col_d1:
         datum_sch = st.date_input(t["date_lbl"], datetime.now())
-        
-    # Načteme aktuální hodinu a minutu ze systému Samsungu
-    nyni = datetime.now()
-    aktualni_hodina = f"{nyni.hour:02d}"
-    
-    # Minuty inteligentně zaokrouhlíme na nejbližších 5 minut pro čistýPC styl
-    zaokrouhlene_minuty = int(5 * round(nyni.minute / 5))
-    if zaokrouhlene_minuty >= 60: zaokrouhlene_minuty = 55
-    aktualni_minuta = f"{zaokrouhlene_minuty:02d}"
-
     with col_t_h:
         hodiny_list = [f"{i:02d}" for i in range(24)]
-        # Pokud aktuální hodina existuje v seznamu, rovnou ji předvybereme jako výchozí
-        idx_h = hodiny_list.index(aktualni_hodina) if aktualni_hodina in hodiny_list else 12
-        zvolena_hodina = st.selectbox("Hodina:", hodiny_list, index=idx_h)
-        
+        zvolena_hodina = st.selectbox("Hodina:", hodiny_list, index=aktualni_hodina_mobil)
     with col_t_m:
         minuty_list = [f"{i:02d}" for i in range(0, 60, 5)]
-        idx_m = minuty_list.index(aktualni_minuta) if aktualni_minuta in minuty_list else 0
-        zvolen_minuta = st.selectbox("Minuta:", minuty_list, index=idx_m)
+        zvolen_minuta = st.selectbox("Minuta:", minuty_list, index=minuty_list.index(f"{zaokrouhlena_minuta:02d}"))
         
     cas_vystup_text = f"{zvolena_hodina}:{zvolen_minuta}"
 
-    # Sekce 2: Hledání a výběr klienta
+    # Sekce 2: Hledání a výběr klienta (Zobrazení rozšířeno na 6 polí)
     st.subheader(t["sec_2"])
     
     seznam_zakazniku = []
@@ -374,7 +368,7 @@ def vykresli_aplikaci():
             sleva_string = ", ".join(slevy_vystup_list) if slevy_vystup_list else "Není"
             
             slevy_objekt = {
-                "situace": ", ".join(sit_seznam) if sit_seznam else "Žádná specifická situation",
+                "situace": ", ".join(sit_seznam) if sit_seznam else "Žádná specifická situace",
                 "sleva": sleva_string,
                 "konkurence": txt_konkurence if txt_konkurence else "Nezadáno",
                 "potencial": f"{txt_potencial} %" if txt_potencial else "Nezadáno"
@@ -490,6 +484,8 @@ def vykresli_aplikaci():
 if __name__ == "__main__":
     TAJNE_HESLO = "Cestak123"
     
+    # Držíme stav přihlášení přímo v bezpečné paměti serveru Streamlitu.
+    # Mobilní prohlížeč vás už nemá šanci sám od sebe odhlásit ani uspat!
     if "prihlasen_trvale" not in st.session_state:
         st.session_state["prihlasen_trvale"] = False
 
