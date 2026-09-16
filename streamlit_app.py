@@ -7,9 +7,20 @@ import urllib.parse
 import unicodedata
 from datetime import datetime
 
+# 🟢 KLÍČOVÝ UPGRADE: Vynutíme instalaci pytz přímo v kódu, aby Streamlit uměl přesný český čas
+try:
+    import pytz
+except ImportError:
+    import subprocess
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "pytz"])
+        import pytz
+    except Exception as e:
+        pass
+
 import streamlit as st
 import pandas as pd
-# Globální nastavení aplikace RouteReport
+# Globální mobilní nastavení aplikace RouteReport
 st.set_page_config(
     page_title="RouteReport",
     page_icon="📱",
@@ -225,7 +236,13 @@ def vykresli_aplikaci():
         try:
             df_kontrol_u = pd.read_csv(UKOLY_SOUBOR, dtype=str)
             if not df_kontrol_u.empty:
-                dnes_str = datetime.now().strftime('%d.%m.%Y')
+                # Načtení dnešního data v české časové zóně
+                try:
+                    cz_tz = pytz.timezone('Europe/Prague')
+                    dnes_str = datetime.now(cz_tz).strftime('%d.%m.%Y')
+                except:
+                    dnes_str = datetime.now().strftime('%d.%m.%Y')
+                    
                 shody_dnes = df_kontrol_u[df_kontrol_u["Termín"] == dnes_str]
                 
                 if len(shody_dnes) > 0 and "popup_odkliknuto" not in st.session_state:
@@ -274,19 +291,28 @@ def vykresli_aplikaci():
 
     if df_klienti is None:
         return
-    # Sekce 1: Čas se dynamicky přizpůsobí aktuálnímu času v telefonu
+    # Sekce 1: Čas se automaticky načte podle reálného českého času v mobilu
     st.subheader(t["sec_1"])
     col_d1, col_t_h, col_t_m = st.columns(3)
     
-    # Získání aktuální hodiny a minuty z mobilního systému
-    aktualni_hodina_mobil = datetime.now().hour
-    aktualni_minuta_mobil = datetime.now().minute
-    # Zaokrouhlení minut na nejbližší pětku, aby to sedělo do seznamu
+    # 🟢 VYNUCENÍ ČESKÉHO ČASU (Evropa/Praha)
+    try:
+        cz_tz = pytz.timezone('Europe/Prague')
+        cas_v_cr = datetime.now(cz_tz)
+        aktualni_hodina_mobil = cas_v_cr.hour
+        aktualni_minuta_mobil = cas_v_cr.minute
+        dnesni_datum_cr = cas_v_cr.date()
+    except:
+        aktualni_hodina_mobil = datetime.now().hour
+        aktualni_minuta_mobil = datetime.now().minute
+        dnesni_datum_cr = datetime.now().date()
+        
+    # Zaokrouhlení minut na nejbližší pětku pro rozevírací seznam
     zaokrouhlena_minuta = int(5 * round(aktualni_minuta_mobil / 5))
     if zaokrouhlena_minuta >= 60: zaokrouhlena_minuta = 55
 
     with col_d1:
-        datum_sch = st.date_input(t["date_lbl"], datetime.now())
+        datum_sch = st.date_input(t["date_lbl"], dnesni_datum_cr)
     with col_t_h:
         hodiny_list = [f"{i:02d}" for i in range(24)]
         zvolena_hodina = st.selectbox("Hodina:", hodiny_list, index=aktualni_hodina_mobil)
@@ -296,7 +322,7 @@ def vykresli_aplikaci():
         
     cas_vystup_text = f"{zvolena_hodina}:{zvolen_minuta}"
 
-    # Sekce 2: Hledání a výběr klienta (Zobrazení rozšířeno na 6 polí)
+    # Sekce 2: Hledání a výběr klienta (Rozšířeno na 6 polí)
     st.subheader(t["sec_2"])
     
     seznam_zakazniku = []
@@ -347,7 +373,14 @@ def vykresli_aplikaci():
         txt_trvani = st.selectbox(t["duration_lbl"], skoky_trvani, index=5)
         st.write("") 
         ch_ozvat = st.checkbox(t["remind_check"])
-        dt_ozvat = st.date_input(t["remind_date"], datetime.now()) if ch_ozvat else None
+        
+        try:
+            cz_tz = pytz.timezone('Europe/Prague')
+            def_remind_date = datetime.now(cz_tz).date()
+        except:
+            def_remind_date = datetime.now().date()
+            
+        dt_ozvat = st.date_input(t["remind_date"], def_remind_date) if ch_ozvat else None
     with col_t2:
         txt_poznamka = st.text_area(t["note_lbl"], height=115)
 
@@ -420,7 +453,12 @@ def vykresli_aplikaci():
         try:
             df_ukoly = pd.read_csv(UKOLY_SOUBOR, dtype=str)
             if not df_ukoly.empty:
-                dnesni_datum = datetime.now().date()
+                try:
+                    cz_tz = pytz.timezone('Europe/Prague')
+                    dnesni_datum = datetime.now(cz_tz).date()
+                except:
+                    dnesni_datum = datetime.now().date()
+                    
                 for idx, row_u in df_ukoly.iterrows():
                     try:
                         t_date = datetime.strptime(row_u["Termín"], "%d.%m.%Y").date()
@@ -485,7 +523,7 @@ if __name__ == "__main__":
     TAJNE_HESLO = "Cestak123"
     
     # Držíme stav přihlášení přímo v bezpečné paměti serveru Streamlitu.
-    # Mobilní prohlížeč vás už nemá šanci sám od sebe odhlásit ani uspat!
+    # Prohlížeč už nemá šanci program sám od sebe uspat nebo odhlásit!
     if "prihlasen_trvale" not in st.session_state:
         st.session_state["prihlasen_trvale"] = False
 
