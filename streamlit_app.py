@@ -23,7 +23,7 @@ LANG = {
         "title": "📱 RouteReport - Poznámky z terénu",
         "cfg_sec": "⚙️ Nastavení adresáře zákazníků (CSV)",
         "cfg_info": "Nahrajte soubor CSV se zákazníky a zadejte e-mail šéfa.",
-        "upload_lbl": "Vyberte soubor s klienty (pouze CSV):",
+        "upload_lbl": "Vyberte soubor s klienty:",
         "email_boss_lbl": "E-mailová adresa manažera / šéfa:",
         "db_loaded_ok": "✅ Adresář zákazníků i e-mail jsou bezpečně uloženy.",
         "db_change_btn": "🔄 Aktualizovat adresář klientů / Změnit e-mail šéfa",
@@ -83,7 +83,7 @@ def zpracuj_a_ulož_soubor(uploaded_file):
         df.to_csv(ULOZENY_ADRESAR_FILE, index=False, encoding="utf-8")
         return df
     except Exception as e:
-        st.error(f"Chyba: {e}")
+        st.error(f"Chyba zpracování: {e}")
         return None
 
 def nacti_trvale_ulozeny_adresar():
@@ -94,7 +94,6 @@ def nacti_trvale_ulozeny_adresar():
 def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy_data, poznamka, jazyk, surovy_radek_klienta=None):
     oddelovac = "=" * 45
     t = LANG[jazyk]
-    
     ciste_jmeno = str(klient_vystup).replace(" | ", " ").strip()
     
     cisty_tel, cisty_mail = "", ""
@@ -171,7 +170,7 @@ def vykresli_aplikaci():
     if "zmena_databaze" not in st.session_state: st.session_state["zmena_databaze"] = False
     df_klienti = nacti_trvale_ulozeny_adresar()
     email_sefa = st.sidebar.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", ""))
-    if email_sefa: st.session_state["boss_email"] = email_sefa
+    if email_sefa: st.sidebar.session_state["boss_email"] = email_sefa
 
     if df_klienti is not None and not st.session_state["zmena_databaze"]:
         st.success(t["db_loaded_ok"])
@@ -182,7 +181,9 @@ def vykresli_aplikaci():
         with st.expander(t["cfg_sec"], expanded=True):
             email_sefa = st.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", ""))
             if email_sefa: st.session_state["boss_email"] = email_sefa
-            nahrany_soubor = st.file_uploader(t["upload_lbl"], type=["csv", "txt"])
+            
+            # 🟢 UPGRADE: Úplně vynecháváme parametr type=["csv"], aby telefon povolil otevřít jakýkoliv soubor ze složky
+            nahrany_soubor = st.file_uploader(t["upload_lbl"])
             if nahrany_soubor is not None:
                 df_klienti = zpracuj_a_ulož_soubor(nahrany_soubor)
                 if df_klienti is not None:
@@ -299,30 +300,15 @@ def vykresli_aplikaci():
     if os.path.exists(HISTORIE_SOUBOR):
         try:
             df_hist_download = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
-            csv_buffer = df_hist_download.copy()
-            if "RawText_Zaloha" in csv_buffer.columns:
-                csv_buffer = csv_buffer.drop(columns=["RawText_Zaloha"])
-            csv_text_data = csv_buffer.to_csv(index=False, encoding="utf-8")
-            
-            # 🟢 NEPRŮSTŘELNÝ UPGRADE: Místo stahování do skrytých složek vyvoláme sdílení v Androidu!
-            text_pro_url_share = urllib.parse.quote(csv_text_data)
-            
-            # Vytvoříme speciální odkaz, který v telefonu Samsung probudí systémové sdílení textu
-            odkaz_sdileni = f"data:text/csv;charset=utf-8,{text_pro_url_share}"
-            
-            # Vykreslíme tlačítko, které se chová jako standardní stahovač, ale Android ho zachytí a dá vám vybrat vaši složku
-            st.download_button(
-                label="📥 ULOŽIT ZÁLOHU DO MÉ VYBRANÉ SLOŽKY (.CSV)",
-                data=csv_text_data,
-                file_name="routereport_zaloha.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
-        except:
-            pass
+            csv_data_data = df_hist_download.to_csv(index=False, encoding="utf-8")
+            st.download_button(label="📥 STÁHNOUT ZÁLOHU DENÍKU (.CSV)", data=csv_data_data, file_name="routereport_zaloha.csv", mime="text/csv", use_container_width=True)
+        except: pass
             
     with st.expander("📤 Obnovit deník ze starší zálohy (.csv)"):
-        soubor_zalohy = st.file_uploader("Vyberte soubor zálohy z vašeho úložiště:", type=["csv"])
+        st.markdown("<small>💡 <i>Tip: Všechny soubory jsou nyní plně odemčené. Stačí prstem kliknout na jakýkoliv dříve schovaný soubor.</i></small>", unsafe_allow_html=True)
+        
+        # 🟢 UPGRADE: Odstraněn parametr type=["csv"], takže Android soubory v okně přestane blokovat a zašedivovat!
+        soubor_zalohy = st.file_uploader("Vyberte stažený soubor zálohy:")
         if soubor_zalohy is not None:
             try:
                 bytes_z = soubor_zalohy.read()
@@ -331,7 +317,7 @@ def vykresli_aplikaci():
                 df_import_zaloha.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
                 st.success("✅ Záloha nahrána! Restartuji...")
                 st.rerun()
-            except Exception as e: st.error(f"Chyba: {e}")
+            except Exception as e: st.error(f"Chyba obnovy: {e}")
 
     st.write("---")
     st.subheader("📅 Moje vnitřní připomínky a úkoly")
