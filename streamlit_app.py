@@ -21,12 +21,12 @@ UKOLY_SOUBOR = "crm_ukoly_kalendar.csv"
 LANG = {
     "CS": {
         "title": "📱 RouteReport - Poznámky z terénu",
-        "cfg_sec": "⚙️ Nastavení databáze",
+        "cfg_sec": "⚙️ Nastavení adresáře zákazníků (CSV)",
         "cfg_info": "Nahrajte soubor CSV se zákazníky a zadejte e-mail šéfa.",
-        "upload_lbl": "Vyberte soubor (pouze CSV):",
+        "upload_lbl": "Vyberte soubor s klienty (pouze CSV):",
         "email_boss_lbl": "E-mailová adresa manažera / šéfa:",
         "db_loaded_ok": "✅ Adresář zákazníků i e-mail jsou bezpečně uloženy.",
-        "db_change_btn": "🔄 Aktualizovat databázi / Změnit e-mail šéfa",
+        "db_change_btn": "🔄 Aktualizovat adresář klientů / Změnit e-mail šéfa",
         "sec_1": "1. Datum, čas a trvání návštěvy",
         "date_lbl": "Datum:",
         "time_lbl": "Čas návštěvy (Hodina / Minuta):",
@@ -97,8 +97,7 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas_text, trvani, ozvat_se, slevy_
     klient_vystup = " | ".join([str(x) for x in klient_radek[:6] if x])
     ciste_jmeno = str(klient_radek).strip() if len(klient_radek) > 0 else "Klient"
     
-    cisty_tel = ""
-    cisty_mail = ""
+    cisty_tel, cisty_mail = "", ""
     for policko in [str(x).strip() for x in klient_radek]:
         if "@" in policko: cisty_mail = policko
         elif policko.isdigit() and len(policko) >= 9: cisty_tel = policko
@@ -180,12 +179,9 @@ def vykresli_aplikaci():
     st.subheader(t["sec_1"])
     col_d1, col_t_h, col_t_m = st.columns(3)
     
-    # Čistý výpočet času posunutého o 10 minut dopředu bez chybových knihoven
     cas_ted_plus_10 = datetime.utcnow() + timedelta(hours=2) + timedelta(minutes=10)
-    akt_h = cas_ted_plus_10.hour
-    akt_m = cas_ted_plus_10.minute
+    akt_h, akt_m = cas_ted_plus_10.hour, cas_ted_plus_10.minute
     
-    # Matematické zaokrouhlení minut dolů na nejbližší pětku, aby to sedělo do seznamu
     zaok_m = int(5 * (akt_m // 5))
     if zaok_m >= 60: zaok_m = 55
 
@@ -266,6 +262,34 @@ def vykresli_aplikaci():
             mail_odkaz = f"mailto:{st.session_state.get('boss_email', '')}?subject={urllib.parse.quote('RouteReport')}&body={urllib.parse.quote(kompletni_text_mailu)}"
             st.markdown(f'<a href="{mail_odkaz}" target="_blank"><button style="width:100%; height:52px; background-color:#1E88E5; color:white; border:none; border-radius:5px; font-weight:bold;">✉️ ODESLAT MANAŽEROVI</button></a>', unsafe_allow_html=True)
         except: pass
+    # 🟢 DOKONALÁ FUNKCE SPRÁVY HISTORIE: Stažení i nahrání zálohy přímo z telefonu!
+    st.write("---")
+    st.subheader("💾 Záloha a obnova mého deníku")
+    
+    col_z1, col_z2 = st.columns(2)
+    with col_z1:
+        if os.path.exists(HISTORIE_SOUBOR):
+            try:
+                df_hist_download = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
+                csv_data_data = df_hist_download.to_csv(index=False, encoding="utf-8")
+                st.download_button(label="📥 STÁHNOUT ZÁLOHU (.CSV)", data=csv_data_data, file_name=f"routereport_zaloha_{datetime.now().strftime('%d_%m_%Y')}.csv", mime="text/csv", use_container_width=True)
+            except: pass
+            
+    with col_z2:
+        # Nahrávání dříve stažené zálohy odkudkoliv z mobilu zpět do systému Streamlitu
+        soubor_zalohy = st.file_uploader("📤 NAHRÁT ZÁLOHU (.CSV)", type=["csv"], label_visibility="collapsed")
+        if soubor_zalohy is not None:
+            try:
+                bytes_z = soubor_zalohy.read()
+                text_z = bytes_z.decode("utf-8", errors="ignore")
+                df_import_zaloha = pd.read_csv(io.StringIO(text_z), dtype=str)
+                # Obnovíme soubor historie na serveru
+                df_import_zaloha.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
+                st.success("✅ Záloha úspěšně nahrána! Restartuji...")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Chyba obnovy: {e}")
+
     st.write("---")
     st.subheader("📅 Moje vnitřní připomínky a úkoly")
     if os.path.exists(UKOLY_SOUBOR):
@@ -300,8 +324,6 @@ def vykresli_aplikaci():
             for f in [HISTORIE_SOUBOR, EXPORT_FILE, UKOLY_SOUBOR]:
                 if os.path.exists(f): os.remove(f)
             st.rerun()
-    if os.path.exists(HISTORIE_SOUBOR):
-        st.download_button(label="📥 Stáhnout zálohu (.csv)", data=pd.read_csv(HISTORIE_SOUBOR).to_csv(index=False, encoding="utf-8"), file_name="routereport.csv", mime="text/csv", use_container_width=True)
 if __name__ == "__main__":
     TAJNE_HESLO = "Cestak123"
     if "prihlasen_trvale" not in st.session_state: st.session_state["prihlasen_trvale"] = False
