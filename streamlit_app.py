@@ -99,8 +99,12 @@ def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy
     
     cisty_tel, cisty_mail = "", ""
     for prvek in ciste_jmeno.split():
-        if "@" in prvek: cisty_mail = prvek
-        elif prvek.replace("+", "").isdigit() and len(prvek) >= 9: cisty_tel = prvek
+        if "@" in prvek: 
+            cisty_mail = prvek
+        else:
+            ciste_cislo = prvek.replace(" ", "").replace("-", "")
+            if ciste_cislo.replace("+", "").isdigit() and len(ciste_cislo.replace("+", "")) >= 9:
+                cisty_tel = ciste_cislo
             
     blok_textu = (
         f"{oddelovac}\n"
@@ -129,7 +133,7 @@ def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy
         if ozvat_se:
             novy_ukol = {
                 "Termín": ozvat_se.strftime('%d.%m.%Y'), 
-                "Klient": ciste_jmeno[:60], 
+                "Klient": ciste_jmeno[:80], 
                 "Telefon": cisty_tel if cisty_tel else "Nezadáno", 
                 "Email": cisty_mail if cisty_mail else "Nezadáno", 
                 "Důvod (Kvůli čemu)": f"Slevy: {slevy_data['sleva']}. {poznamka}"
@@ -187,34 +191,27 @@ def vykresli_aplikaci():
     
     cas_ted_plus_10 = datetime.utcnow() + timedelta(hours=2) + timedelta(minutes=10)
     akt_h, akt_m = cas_ted_plus_10.hour, cas_ted_plus_10.minute
-    zaok_m = int(5 * (akt_m // 5))
-    if zaok_m >= 60: zaok_m = 55
-
+    
     with col_d1: datum_sch = st.date_input(t["date_lbl"], cas_ted_plus_10.date())
     with col_t_h:
         hodiny_list = [f"{i:02d}" for i in range(24)]
         zvolena_hodina = st.selectbox("Hodina:", hodiny_list, index=akt_h)
     with col_t_m:
-        minuty_list = [f"{i:02d}" for i in range(0, 60, 5)]
-        zvolen_minuta = st.selectbox("Minuta:", minuty_list, index=minuty_list.index(f"{zaok_m:02d}"))
+        minuty_list = ["00", "10", "20", "30", "40", "50"]
+        zaok_desitky = int(10 * (akt_m // 10))
+        if zaok_desitky >= 60: zaok_desitky = 50
+        zvolen_minuta = st.selectbox("Minuta:", minuty_list, index=minuty_list.index(f"{zaok_desitky:02d}"))
     cas_vystup_text = f"{zvolena_hodina}:{zvolen_minuta}"
 
     st.subheader(t["sec_2"])
-    
     seznam_zakazniku = []
     for _, row in df_klienti.iterrows():
         krasny_text = " | ".join([str(row.iloc[i]) for i in range(min(len(row), 6)) if row.iloc[i]])
         seznam_zakazniku.append(krasny_text)
 
-    vybrany_box_text = st.selectbox(
-        t["search_hint"],
-        options=seznam_zakazniku,
-        index=None,
-        placeholder=t["select_prompt"]
-    )
-    
+    vybrany_box_text = st.selectbox(t["search_hint"], options=seznam_zakazniku, index=None, placeholder=t["select_prompt"])
     st.caption("✍️ Nebo napište jméno ZCELA NOVÉHO klienta ručně (pokud chybí v adresáři):")
-    novy_klient_manualni = st.text_input("Zadejte jméno, telefon nebo město nového kontaktu:", value="", placeholder="Např. Škol laduskav | +420123...").strip()
+    novy_klient_manualni = st.text_input("Zadejte jméno, telefon nebo město nového kontaktu:", value="", placeholder="Např. Jan Nečas | +420777123456").strip()
 
     finalni_klient_vystup = ""
     if vybrany_box_text:
@@ -250,7 +247,7 @@ def vykresli_aplikaci():
     with col_t2: txt_poznamka = st.text_area(t["note_lbl"], height=115)
     st.write("---")
     if st.button(t["btn_save"], use_container_width=True):
-        if not finalni_klient_vystup: st.error("❌ Vyberte klienta ze seznamu nebo ho napište ručně do pole níže!")
+        if not finalni_klient_vystup: st.error("❌ Vyberte klienta ze seznamu!")
         else:
             sit_seznam = []
             if ch_b2b: sit_seznam.append("Bude zaslán přístup na B2B")
@@ -272,8 +269,6 @@ def vykresli_aplikaci():
     if os.path.exists(HISTORIE_SOUBOR):
         try:
             df_hist = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
-            
-            # 🎯 KLÍČOVÝ TRIK: Vytvoříme si indexované pořadí od nejnovějšího, ale zachováme původní čísla řádků (skutečný index)
             df_zobrazeni = df_hist.copy()
             df_zobrazeni["skutecny_index"] = df_zobrazeni.index
             df_inverted = df_zobrazeni.iloc[::-1]
@@ -283,12 +278,10 @@ def vykresli_aplikaci():
                 with st.container(border=True):
                     st.markdown(f"📅 **{radek_historie['Datum']} {radek_historie['Čas']}** | 🏢 **{radek_historie['Klient']}**")
                     st.markdown(f"📝 **Poznámka:** {radek_historie['Poznámka']}")
-                    
-                    # Tlačítko nyní maže exaktní původní index z pevného disku
                     if st.button(f"🗑️ Smazat tento zápis", key=f"del_row_hist_{puvodni_radek_id}", use_container_width=True):
                         df_upraveny_hist = df_hist.drop(df_hist.index[puvodni_radek_id])
                         df_upraveny_hist.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
-                        st.success("Zápis úspěšně smazán!")
+                        st.success("Zápis smazán!")
                         st.rerun()
             
             st.write("")
@@ -300,10 +293,13 @@ def vykresli_aplikaci():
         try:
             df_hist_download = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
             csv_data_data = df_hist_download.to_csv(index=False, encoding="utf-8")
-            st.download_button(label="📥 STÁHNOUT ZÁLOHU DENÍKU (.CSV)", data=csv_data_data, file_name=f"routereport_backup.csv", mime="text/csv", use_container_width=True)
+            # 🟢 UPGRADE: Pevný, jasný a neměnný název staženého souboru pro snadné nalezení v mobilu
+            st.download_button(label="📥 STÁHNOUT ZÁLOHU DENÍKU (.CSV)", data=csv_data_data, file_name="routereport_zaloha.csv", mime="text/csv", use_container_width=True)
         except: pass
             
     with st.expander("📤 Obnovit deník ze starší zálohy (.csv)"):
+        # 🟢 UPGRADE: Přehledná textová instrukce pro Samsung, kde přesně soubor v paměti hledat
+        st.markdown("<small>💡 <i>Tip: V telefonu soubor hledejte ve složce <b>Stažené soubory (Downloads)</b> pod názvem <b>routereport_zaloha.csv</b>.</i></small>", unsafe_allow_html=True)
         soubor_zalohy = st.file_uploader("Vyberte stažený soubor zálohy:", type=["csv"])
         if soubor_zalohy is not None:
             try:
@@ -327,15 +323,37 @@ def vykresli_aplikaci():
                         t_date = datetime.strptime(row_u["Termín"], "%d.%m.%Y").date()
                         status_badge = "🔴 HOŘÍ!" if (t_date - dnes_dt).days < 0 else "🟢 V plánu"
                     except: status_badge = "🟢 V plánu"
+                    
                     with st.container(border=True):
-                        st.markdown(f"**{status_badge}** | 📅 {row_u['Termín']} | 🏢 {row_u['Klient']}\n\n📝 Důvod: {row_u['Důvod (Kvůli čemu)']}")
+                        cisty_vzhled_klienta = str(row_u['Klient']).replace("nan", "").replace("|", " ").strip()
+                        st.markdown(f"**{status_badge}** | 📅 {row_u['Termín']} | 🏢 **{cisty_vzhled_klienta}**")
+                        st.markdown(f"📝 Důvod: {row_u['Důvod (Kvůli čemu)']}")
+                        
+                        cely_balik_textu = str(row_u['Klient']) + " " + str(row_u.get('Telefon', '')) + " " + str(row_u.get('Email', ''))
+                        cely_balik_textu = cely_balik_textu.replace("nan", "").replace("|", " ")
+                        
+                        nalezeny_tel, nalezeny_mail = "", ""
+                        for slovo in cely_balik_textu.split():
+                            if "@" in slovo:
+                                max_len = slovo.strip(".,()[]")
+                            else:
+                                ciste_slovo = slovo.replace(" ", "").replace("-", "").strip(".,()[]|")
+                                if ciste_slovo.replace("+", "").isdigit() and len(ciste_slovo.replace("+", "")) >= 9:
+                                    nalezeny_tel = ciste_slovo
+                        
                         col_c1, col_c2 = st.columns(2)
-                        tel_val = str(row_u['Telefon']).strip() if 'Telefon' in row_u and pd.notna(row_u['Telefon']) else ""
-                        mail_val = str(row_u['Email']).strip() if 'Email' in row_u and pd.notna(row_u['Email']) else ""
                         with col_c1:
-                            if tel_val and tel_val != "nan" and tel_val != "": st.markdown(f'<a href="tel:{tel_val}"><button style="width:100%; height:36px; background-color:#2E7D32; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">📞 VOLAT: {tel_val}</button></a>', unsafe_allow_html=True)
+                            if nalezeny_tel:
+                                st.markdown(f'<a href="tel:{nalezeny_tel}"><button style="width:100%; height:36px; background-color:#2E7D32; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">📞 VOLAT: {nalezeny_tel}</button></a>', unsafe_allow_html=True)
+                            else:
+                                st.markdown('<a href="tel:"><button style="width:100%; height:36px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">📞 OTEVŘÍT TELEFON</button></a>', unsafe_allow_html=True)
                         with col_c2:
-                            if mail_val and mail_val != "nan" and mail_val != "": st.markdown(f'<a href="mailto:{mail_val}"><button style="width:100%; height:36px; background-color:#1565C0; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">✉️ E-MAIL</button></a>', unsafe_allow_html=True)
+                            if "@" in str(row_u.get('Email', '')):
+                                st.markdown(f'<a href="mailto:{row_u["Email"]}"><button style="width:100%; height:36px; background-color:#1565C0; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">✉️ E-MAIL</button></a>', unsafe_allow_html=True)
+                            else:
+                                st.markdown('<a href="mailto:"><button style="width:100%; height:36px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">✉️ OTEVŘÍT E-MAIL</button></a>', unsafe_allow_html=True)
+                        
+                        st.write("")
                         if st.button("✅ Vyřízeno", key=f"del_{idx}", use_container_width=True):
                             df_ukoly.drop(df_ukoly.index[idx]).to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
                             st.rerun()
