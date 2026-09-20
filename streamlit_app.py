@@ -97,13 +97,10 @@ def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy
     
     ciste_jmeno = str(klient_vystup).replace(" | ", " ").strip()
     
-    # Exaktní vytažení kontaktu z celého textu řádku
     cisty_tel, cisty_mail = "", ""
     for prvek in ciste_jmeno.split():
-        if "@" in prvek: 
-            cisty_mail = prvek
-        elif prvek.replace("+", "").isdigit() and len(prvek) >= 9: 
-            cisty_tel = prvek
+        if "@" in prvek: cisty_mail = prvek
+        elif prvek.replace("+", "").isdigit() and len(prvek) >= 9: cisty_tel = prvek
             
     blok_textu = (
         f"{oddelovac}\n"
@@ -275,18 +272,35 @@ def vykresli_aplikaci():
     if os.path.exists(HISTORIE_SOUBOR):
         try:
             df_hist = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
+            
+            # 🎯 KLÍČOVÝ TRIK: Vytvoříme si indexované pořadí od nejnovějšího, ale zachováme původní čísla řádků (skutečný index)
             df_zobrazeni = df_hist.copy()
-            if "RawText_Zaloha" in df_zobrazeni.columns: df_zobrazeni = df_zobrazeni.drop(columns=["RawText_Zaloha"])
-            st.dataframe(df_zobrazeni.iloc[::-1], use_container_width=True)
+            df_zobrazeni["skutecny_index"] = df_zobrazeni.index
+            df_inverted = df_zobrazeni.iloc[::-1]
+            
+            for _, radek_historie in df_inverted.iterrows():
+                puvodni_radek_id = int(radek_historie["skutecny_index"])
+                with st.container(border=True):
+                    st.markdown(f"📅 **{radek_historie['Datum']} {radek_historie['Čas']}** | 🏢 **{radek_historie['Klient']}**")
+                    st.markdown(f"📝 **Poznámka:** {radek_historie['Poznámka']}")
+                    
+                    # Tlačítko nyní maže exaktní původní index z pevného disku
+                    if st.button(f"🗑️ Smazat tento zápis", key=f"del_row_hist_{puvodni_radek_id}", use_container_width=True):
+                        df_upraveny_hist = df_hist.drop(df_hist.index[puvodni_radek_id])
+                        df_upraveny_hist.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
+                        st.success("Zápis úspěšně smazán!")
+                        st.rerun()
+            
+            st.write("")
             kompletni_text_mailu = "\n".join(df_hist["RawText_Zaloha"].tolist()) if "RawText_Zaloha" in df_hist.columns else ""
             mail_odkaz = f"mailto:{st.session_state.get('boss_email', '')}?subject={urllib.parse.quote('RouteReport')}&body={urllib.parse.quote(kompletni_text_mailu)}"
-            st.markdown(f'<a href="{mail_odkaz}" target="_blank"><button style="width:100%; height:52px; background-color:#1E88E5; color:white; border:none; border-radius:5px; font-weight:bold;">✉️ ODESLAT MANAŽEROVI</button></a>', unsafe_allow_html=True)
+            st.markdown(f'<a href="{mail_odkaz}" target="_blank"><button style="width:100%; height:52px; background-color:#1E88E5; color:white; border:none; border-radius:5px; font-weight:bold;">✉️ ODESLAT REPORT MANAŽEROVI</button></a>', unsafe_allow_html=True)
         except: pass
     if os.path.exists(HISTORIE_SOUBOR):
         try:
             df_hist_download = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
             csv_data_data = df_hist_download.to_csv(index=False, encoding="utf-8")
-            st.download_button(label="📥 STÁHNOUT ZÁLOHU (.CSV)", data=csv_data_data, file_name=f"routereport_zaloha_{datetime.now().strftime('%d_%m_%Y')}.csv", mime="text/csv", use_container_width=True)
+            st.download_button(label="📥 STÁHNOUT ZÁLOHU DENÍKU (.CSV)", data=csv_data_data, file_name=f"routereport_backup.csv", mime="text/csv", use_container_width=True)
         except: pass
             
     with st.expander("📤 Obnovit deník ze starší zálohy (.csv)"):
@@ -313,50 +327,21 @@ def vykresli_aplikaci():
                         t_date = datetime.strptime(row_u["Termín"], "%d.%m.%Y").date()
                         status_badge = "🔴 HOŘÍ!" if (t_date - dnes_dt).days < 0 else "🟢 V plánu"
                     except: status_badge = "🟢 V plánu"
-                    
                     with st.container(border=True):
                         st.markdown(f"**{status_badge}** | 📅 {row_u['Termín']} | 🏢 {row_u['Klient']}\n\n📝 Důvod: {row_u['Důvod (Kvůli čemu)']}")
-                        
-                        # 🟢 INTELIGENTNÍ FILTR PRO VOLÁNÍ A MAILY:
-                        # Vytáhneme jakákoliv čísla nebo maily obsažené přímo v názvu karty!
-                        cely_text_karty = str(row_u['Klient']) + " " + str(row_u['Telefon']) + " " + str(row_u['Email'])
-                        cely_text_karty = cely_text_karty.replace("nan", "").strip()
-                        
-                        nalezeny_tel = ""
-                        nalezeny_mail = ""
-                        for slovo in cely_text_karty.split():
-                            if "@" in slovo:
-                                nalezeny_mail = slovo
-                            elif slovo.replace("+", "").strip().isdigit() and len(slovo.replace("+", "").strip()) >= 9:
-                                nalezeny_tel = slovo.strip()
-                        
                         col_c1, col_c2 = st.columns(2)
+                        tel_val = str(row_u['Telefon']).strip() if 'Telefon' in row_u and pd.notna(row_u['Telefon']) else ""
+                        mail_val = str(row_u['Email']).strip() if 'Email' in row_u and pd.notna(row_u['Email']) else ""
                         with col_c1:
-                            if nalezeny_tel:
-                                st.markdown(f'<a href="tel:{nalezeny_tel}"><button style="width:100%; height:36px; background-color:#2E7D32; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">📞 VOLAT: {nalezeny_tel}</button></a>', unsafe_allow_html=True)
-                            else:
-                                # Pokud číslo chybí, necháme tlačítko univerzální pro rychlé otevření vytáčení
-                                st.markdown('<a href="tel:"><button style="width:100%; height:36px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">📞 OTEVŘÍT TELEFON</button></a>', unsafe_allow_html=True)
+                            if tel_val and tel_val != "nan" and tel_val != "": st.markdown(f'<a href="tel:{tel_val}"><button style="width:100%; height:36px; background-color:#2E7D32; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">📞 VOLAT: {tel_val}</button></a>', unsafe_allow_html=True)
                         with col_c2:
-                            if nalezeny_mail:
-                                st.markdown(f'<a href="mailto:{nalezeny_mail}"><button style="width:100%; height:36px; background-color:#1565C0; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">✉️ E-MAIL: {nalezeny_mail}</button></a>', unsafe_allow_html=True)
-                            else:
-                                st.markdown('<a href="mailto:"><button style="width:100%; height:36px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">✉️ OTEVŘÍT E-MAIL</button></a>', unsafe_allow_html=True)
-                        
-                        st.write("")
+                            if mail_val and mail_val != "nan" and mail_val != "": st.markdown(f'<a href="mailto:{mail_val}"><button style="width:100%; height:36px; background-color:#1565C0; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">✉️ E-MAIL</button></a>', unsafe_allow_html=True)
                         if st.button("✅ Vyřízeno", key=f"del_{idx}", use_container_width=True):
                             df_ukoly.drop(df_ukoly.index[idx]).to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
                             st.rerun()
             else: st.caption("Žádné připomínky.")
         except: st.caption("Žádné připomínky.")
     else: st.caption("Žádné připomínky.")
-
-    st.write("---")
-    with st.expander("🗑️ Čistění deníku"):
-        if st.button("🚨 VYČISTIT ÚPLNĚ VŠE", use_container_width=True):
-            for f in [HISTORIE_SOUBOR, EXPORT_FILE, UKOLY_SOUBOR]:
-                if os.path.exists(f): os.remove(f)
-            st.rerun()
 if __name__ == "__main__":
     TAJNE_HESLO = "Cestak123"
     if "prihlasen_trvale" not in st.session_state: st.session_state["prihlasen_trvale"] = False
