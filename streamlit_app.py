@@ -91,17 +91,18 @@ def nacti_trvale_ulozeny_adresar():
         try: return pd.read_csv(ULOZENY_ADRESAR_FILE, dtype=str)
         except: pass
     return None
-def zapis_zaznam_na_disk(klient_radek, datum, cas_text, trvani, ozvat_se, slevy_data, poznamka, jazyk):
+def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy_data, poznamka, jazyk):
     oddelovac = "=" * 45
     t = LANG[jazyk]
-    klient_vystup = " | ".join([str(x) for x in klient_radek[:6] if x])
-    ciste_jmeno = str(klient_radek).strip() if len(klient_radek) > 0 else "Klient"
+    
+    # Použijeme rovnou textový řetězec vybraného/napsaného klienta
+    ciste_jmeno = str(klient_vystup).replace(" | ", " ").strip()
     
     cisty_tel, cisty_mail = "", ""
-    for policko in [str(x).strip() for x in klient_radek]:
-        if "@" in policko: cisty_mail = policko
-        elif policko.isdigit() and len(policko) >= 9: cisty_tel = policko
-        elif ("+" in policko) and len(policko) >= 10: cisty_tel = policko
+    # Pokusíme se z textu vytáhnout telefon nebo e-mail, pokud je v řádku přítomen
+    for prvek in ciste_jmeno.split():
+        if "@" in prvek: cisty_mail = prvek
+        elif prvek.isdigit() and len(prvek) >= 9: cisty_tel = prvek
             
     blok_textu = (
         f"{oddelovac}\n"
@@ -127,7 +128,7 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas_text, trvani, ozvat_se, slevy_
         if os.path.exists(HISTORIE_SOUBOR): df_novy.to_csv(HISTORIE_SOUBOR, mode='a', header=False, index=False, encoding="utf-8")
         else: df_novy.to_csv(HISTORIE_SOUBOR, mode='w', header=True, index=False, encoding="utf-8")
         if ozvat_se:
-            novy_ukol = {"Termín": ozvat_se.strftime('%d.%m.%Y'), "Klient": ciste_jmeno, "Telefon": cisty_tel, "Email": cisty_mail, "Důvod (Kvůli čemu)": f"Slevy: {slevy_data['sleva']}. {poznamka}"}
+            novy_ukol = {"Termín": ozvat_se.strftime('%d.%m.%Y'), "Klient": ciste_jmeno[:50], "Telefon": cisty_tel, "Email": cisty_mail, "Důvod (Kvůli čemu)": f"Slevy: {slevy_data['sleva']}. {poznamka}"}
             df_ukol = pd.DataFrame([novy_ukol])
             if os.path.exists(UKOLY_SOUBOR): df_ukol.to_csv(UKOLY_SOUBOR, mode='a', header=False, index=False, encoding="utf-8")
             else: df_ukol.to_csv(UKOLY_SOUBOR, mode='w', header=True, index=False, encoding="utf-8")
@@ -181,7 +182,6 @@ def vykresli_aplikaci():
     
     cas_ted_plus_10 = datetime.utcnow() + timedelta(hours=2) + timedelta(minutes=10)
     akt_h, akt_m = cas_ted_plus_10.hour, cas_ted_plus_10.minute
-    
     zaok_m = int(5 * (akt_m // 5))
     if zaok_m >= 60: zaok_m = 55
 
@@ -195,17 +195,33 @@ def vykresli_aplikaci():
     cas_vystup_text = f"{zvolena_hodina}:{zvolen_minuta}"
 
     st.subheader(t["sec_2"])
-    seznam_zakazniku, mapovani_zaznamu = [], {}
+    
+    # Sestavení seznamu z existující databáze
+    seznam_zakazniku = []
     for _, row in df_klienti.iterrows():
         krasny_text = " | ".join([str(row.iloc[i]) for i in range(min(len(row), 6)) if row.iloc[i]])
         seznam_zakazniku.append(krasny_text)
-        mapovani_zaznamu[krasny_text] = row.tolist()
 
-    vybrany_box_text = st.selectbox(t["search_hint"], options=seznam_zakazniku, index=None, placeholder=t["select_prompt"])
-    vybrany_klient = None
-    if vybrany_box_text and vybrany_box_text in mapovani_zaznamu:
-        vybrany_klient = mapovani_zaznamu[vybrany_box_text]
-        st.success(f"{t['selected_ok']} {vybrany_box_text}")
+    # 🎯 UPGRADE: Použijeme vyhledávač, který umí vygenerovat novou možnost za chodu
+    vybrany_box_text = st.selectbox(
+        t["search_hint"],
+        options=seznam_zakazniku,
+        index=None,
+        placeholder=t["select_prompt"]
+    )
+    
+    # Druhé záložní textové pole pro zapsání zcela nového kontaktu, který není v adresáři
+    st.caption("✍️ Nebo napište jméno ZCELA NOVÉHO klienta ručně (pokud chybí v adresáři):")
+    novy_klient_manualni = st.text_input("Zadejte jméno, telefon nebo město nového kontaktu:", value="", placeholder="Např. Škol laduskav | +420123...").strip()
+
+    # Určení, kterého klienta finálně použijeme pro zápis
+    finalni_klient_vystup = ""
+    if vybrany_box_text:
+        finalni_klient_vystup = vybrany_box_text
+        st.success(f"{t['selected_ok']} {finalni_klient_vystup}")
+    elif novy_klient_manualni:
+        finalni_klient_vystup = f"🆕 {novy_klient_manualni}"
+        st.info(f"✨ Bude uloženo jako nový kontakt: {novy_klient_manualni}")
     st.subheader(t["sec_3"])
     ch_b2b = st.checkbox(t["b2b_lbl"])
     ch_zajem = st.checkbox(t["no_interest"])
@@ -233,7 +249,7 @@ def vykresli_aplikaci():
     with col_t2: txt_poznamka = st.text_area(t["note_lbl"], height=115)
     st.write("---")
     if st.button(t["btn_save"], use_container_width=True):
-        if not vybrany_klient: st.error("❌ Vyberte klienta!")
+        if not finalni_klient_vystup: st.error("❌ Vyberte klienta ze seznamu nebo ho napište ručně do pole níže!")
         else:
             sit_seznam = []
             if ch_b2b: sit_seznam.append("Bude zaslán přístup na B2B")
@@ -246,7 +262,7 @@ def vykresli_aplikaci():
                 "sleva": ", ".join(slevy_vystup_list) if slevy_vystup_list else "Není",
                 "konkurence": txt_konkurence if txt_konkurence else "Nezadáno", "potencial": f"{txt_potencial} %" if txt_potencial else "Nezadáno"
             }
-            if zapis_zaznam_na_disk(vybrany_klient, datum_sch, cas_vystup_text, txt_trvani, dt_ozvat, slevy_objekt, txt_poznamka, jazyk):
+            if zapis_zaznam_na_disk(finalni_klient_vystup, datum_sch, cas_vystup_text, txt_trvani, dt_ozvat, slevy_objekt, txt_poznamka, jazyk):
                 st.success(t["save_success"])
                 st.rerun()
 
@@ -262,33 +278,24 @@ def vykresli_aplikaci():
             mail_odkaz = f"mailto:{st.session_state.get('boss_email', '')}?subject={urllib.parse.quote('RouteReport')}&body={urllib.parse.quote(kompletni_text_mailu)}"
             st.markdown(f'<a href="{mail_odkaz}" target="_blank"><button style="width:100%; height:52px; background-color:#1E88E5; color:white; border:none; border-radius:5px; font-weight:bold;">✉️ ODESLAT MANAŽEROVI</button></a>', unsafe_allow_html=True)
         except: pass
-    # 🟢 DOKONALÁ FUNKCE SPRÁVY HISTORIE: Stažení i nahrání zálohy přímo z telefonu!
-    st.write("---")
-    st.subheader("💾 Záloha a obnova mého deníku")
-    
-    col_z1, col_z2 = st.columns(2)
-    with col_z1:
-        if os.path.exists(HISTORIE_SOUBOR):
-            try:
-                df_hist_download = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
-                csv_data_data = df_hist_download.to_csv(index=False, encoding="utf-8")
-                st.download_button(label="📥 STÁHNOUT ZÁLOHU (.CSV)", data=csv_data_data, file_name=f"routereport_zaloha_{datetime.now().strftime('%d_%m_%Y')}.csv", mime="text/csv", use_container_width=True)
-            except: pass
+    if os.path.exists(HISTORIE_SOUBOR):
+        try:
+            df_hist_download = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
+            csv_data_data = df_hist_download.to_csv(index=False, encoding="utf-8")
+            st.download_button(label="📥 STÁHNOUT ZÁLOHU (.CSV)", data=csv_data_data, file_name=f"routereport_zaloha_{datetime.now().strftime('%d_%m_%Y')}.csv", mime="text/csv", use_container_width=True)
+        except: pass
             
-    with col_z2:
-        # Nahrávání dříve stažené zálohy odkudkoliv z mobilu zpět do systému Streamlitu
-        soubor_zalohy = st.file_uploader("📤 NAHRÁT ZÁLOHU (.CSV)", type=["csv"], label_visibility="collapsed")
+    with st.expander("📤 Obnovit deník ze starší zálohy (.csv)"):
+        soubor_zalohy = st.file_uploader("Vyberte stažený soubor zálohy:", type=["csv"])
         if soubor_zalohy is not None:
             try:
                 bytes_z = soubor_zalohy.read()
                 text_z = bytes_z.decode("utf-8", errors="ignore")
                 df_import_zaloha = pd.read_csv(io.StringIO(text_z), dtype=str)
-                # Obnovíme soubor historie na serveru
                 df_import_zaloha.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
                 st.success("✅ Záloha úspěšně nahrána! Restartuji...")
                 st.rerun()
-            except Exception as e:
-                st.error(f"Chyba obnovy: {e}")
+            except Exception as e: st.error(f"Chyba: {e}")
 
     st.write("---")
     st.subheader("📅 Moje vnitřní připomínky a úkoly")
