@@ -47,7 +47,7 @@ LANG = {
         "note_lbl": "Napište průběh jednání nebo výsledek návštěvy:",
         "remind_check": "🔔 Naplánovat termín příštího kontaktu (Vnitřní připomínka)",
         "remind_date": "Kdy se ozvat znovu:",
-        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVÊ",
+        "btn_save": "💾 ULOŽIT INFO O NÁVŠTÊWÊ",
         "save_success": "✅ Info o návštěvě úspěšně uloženo!",
         "copy_title": "📋 Text ke zkopírování:",
         "out_date": "📅 DATUM A ČAS",
@@ -170,7 +170,7 @@ def vykresli_aplikaci():
     if "zmena_databaze" not in st.session_state: st.session_state["zmena_databaze"] = False
     df_klienti = nacti_trvale_ulozeny_adresar()
     email_sefa = st.sidebar.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", ""))
-    if email_sefa: st.sidebar.session_state["boss_email"] = email_sefa
+    if email_sefa: st.session_state["boss_email"] = email_sefa
 
     if df_klienti is not None and not st.session_state["zmena_databaze"]:
         st.success(t["db_loaded_ok"])
@@ -182,7 +182,6 @@ def vykresli_aplikaci():
             email_sefa = st.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", ""))
             if email_sefa: st.session_state["boss_email"] = email_sefa
             
-            # 🟢 UPGRADE: Úplně vynecháváme parametr type=["csv"], aby telefon povolil otevřít jakýkoliv soubor ze složky
             nahrany_soubor = st.file_uploader(t["upload_lbl"])
             if nahrany_soubor is not None:
                 df_klienti = zpracuj_a_ulož_soubor(nahrany_soubor)
@@ -297,6 +296,75 @@ def vykresli_aplikaci():
             mail_odkaz = f"mailto:{st.session_state.get('boss_email', '')}?subject={urllib.parse.quote('RouteReport')}&body={urllib.parse.quote(kompletni_text_mailu)}"
             st.markdown(f'<a href="{mail_odkaz}" target="_blank"><button style="width:100%; height:52px; background-color:#1E88E5; color:white; border:none; border-radius:5px; font-weight:bold;">✉️ ODESLAT REPORT MANAŽEROVI</button></a>', unsafe_allow_html=True)
         except: pass
+    st.subheader(t["sec_3"])
+    ch_b2b = st.checkbox(t["b2b_lbl"])
+    ch_zajem = st.checkbox(t["no_interest"])
+    st.caption(t["samples_lbl"])
+    c_z1, col_z2, col_z3, col_z4 = st.columns(4)
+    with c_z1: m_bbb = st.checkbox("BBB")
+    with col_z2: m_cyclon = st.checkbox("CYCLON")
+    with col_z3: m_basil = st.checkbox("BASIL")
+    with col_z4: m_rozzo = st.checkbox("ROZZO")
+    
+    zapisane_slevy = {}
+    if m_bbb: zapisane_slevy["BBB"] = st.text_input("Sleva BBB (%):", value="", key="sl_bbb")
+    if m_cyclon: zapisane_slevy["CYCLON"] = st.text_input("Sleva CYCLON (%):", value="", key="sl_cyc")
+    if m_basil: zapisane_slevy["BASIL"] = st.text_input("Sleva BASIL (%):", value="", key="sl_bas")
+    if m_rozzo: zapisane_slevy["ROZZO"] = st.text_input("Sleva ROZZO (%):", value="", key="sl_roz")
+        
+    txt_konkurence = st.text_input(t["competitor_lbl"], value="")
+    txt_potencial = st.text_input(t["potential_lbl"], value="")
+    st.subheader(t["sec_4"])
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        txt_trvani = st.selectbox(t["duration_lbl"], [str(i) for i in range(5, 125, 5)], index=5)
+        ch_ozvat = st.checkbox(t["remind_check"])
+        dt_ozvat = st.date_input(t["remind_date"], (datetime.utcnow() + timedelta(hours=2)).date()) if ch_ozvat else None
+    with col_t2: txt_poznamka = st.text_area(t["note_lbl"], height=115)
+    st.write("---")
+    if st.button(t["btn_save"], use_container_width=True):
+        if not finalni_klient_vystup: st.error("❌ Vyberte klienta ze seznamu!")
+        else:
+            sit_seznam = []
+            if ch_b2b: sit_seznam.append("Bude zaslán přístup na B2B")
+            if ch_zajem: sit_seznam.append("Nemá zájem - bere od jiných")
+            zvolene_znacky = [z for z, c in [("BBB", m_bbb), ("CYCLON", m_cyclon), ("BASIL", m_basil), ("ROZZO", m_rozzo)] if c]
+            if zvolene_znacky: sit_seznam.insert(0, f"Předvedeny vzorky ({', '.join(zvolene_znacky)})")
+            slevy_vystup_list = [f"{znacka}: {hodnota} %" for znacka, hodnota in zapisane_slevy.items() if hodnota.strip()]
+            slevy_objekt = {
+                "situace": ", ".join(sit_seznam) if sit_seznam else "Žádná specifická situace",
+                "sleva": ", ".join(slevy_vystup_list) if slevy_vystup_list else "Není",
+                "konkurence": txt_konkurence if txt_konkurence else "Nezadáno", "potencial": f"{txt_potencial} %" if txt_potencial else "Nezadáno"
+            }
+            if zapis_zaznam_na_disk(finalni_klient_vystup, datum_sch, cas_vystup_text, txt_trvani, dt_ozvat, slevy_objekt, txt_poznamka, jazyk, surovy_radek_pro_zápis):
+                st.success(t["save_success"])
+                st.rerun()
+
+    st.write("---")
+    st.subheader("📋 Deník mých návštěv")
+    if os.path.exists(HISTORIE_SOUBOR):
+        try:
+            df_hist = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
+            df_zobrazeni = df_hist.copy()
+            df_zobrazeni["skutecny_index"] = df_zobrazeni.index
+            df_inverted = df_zobrazeni.iloc[::-1]
+            
+            for _, radek_historie in df_inverted.iterrows():
+                puvodni_radek_id = int(radek_historie["skutecny_index"])
+                with st.container(border=True):
+                    st.markdown(f"📅 **{radek_historie['Datum']} {radek_historie['Čas']}** | 🏢 **{radek_historie['Klient']}**")
+                    st.markdown(f"📝 **Poznámka:** {radek_historie['Poznámka']}")
+                    if st.button(f"🗑️ Smazat tento zápis", key=f"del_row_hist_{puvodni_radek_id}", use_container_width=True):
+                        df_upraveny_hist = df_hist.drop(df_hist.index[puvodni_radek_id])
+                        df_upraveny_hist.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
+                        st.success("Zápis smazán!")
+                        st.rerun()
+            
+            st.write("")
+            kompletni_text_mailu = "\n".join(df_hist["RawText_Zaloha"].tolist()) if "RawText_Zaloha" in df_hist.columns else ""
+            mail_odkaz = f"mailto:{st.session_state.get('boss_email', '')}?subject={urllib.parse.quote('RouteReport')}&body={urllib.parse.quote(kompletni_text_mailu)}"
+            st.markdown(f'<a href="{mail_odkaz}" target="_blank"><button style="width:100%; height:52px; background-color:#1E88E5; color:white; border:none; border-radius:5px; font-weight:bold;">✉️ ODESLAT REPORT MANAŽEROVI</button></a>', unsafe_allow_html=True)
+        except: pass
     if os.path.exists(HISTORIE_SOUBOR):
         try:
             df_hist_download = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
@@ -306,8 +374,6 @@ def vykresli_aplikaci():
             
     with st.expander("📤 Obnovit deník ze starší zálohy (.csv)"):
         st.markdown("<small>💡 <i>Tip: Všechny soubory jsou nyní plně odemčené. Stačí prstem kliknout na jakýkoliv dříve schovaný soubor.</i></small>", unsafe_allow_html=True)
-        
-        # 🟢 UPGRADE: Odstraněn parametr type=["csv"], takže Android soubory v okně přestane blokovat a zašedivovat!
         soubor_zalohy = st.file_uploader("Vyberte stažený soubor zálohy:")
         if soubor_zalohy is not None:
             try:
