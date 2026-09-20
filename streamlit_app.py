@@ -97,12 +97,13 @@ def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy
     
     ciste_jmeno = str(klient_vystup).replace(" | ", " ").strip()
     
+    # 🟢 AKTUALIZACE: Prohledáme text řádku a vytáhneme telefon i e-mail z originálních sloupců
     cisty_tel, cisty_mail = "", ""
     for prvek in ciste_jmeno.split():
         if "@" in prvek: 
             cisty_mail = prvek
         else:
-            ciste_cislo = prvek.replace(" ", "").replace("-", "")
+            ciste_cislo = prvek.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
             if ciste_cislo.replace("+", "").isdigit() and len(ciste_cislo.replace("+", "")) >= 9:
                 cisty_tel = ciste_cislo
             
@@ -131,9 +132,10 @@ def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy
         else: df_novy.to_csv(HISTORIE_SOUBOR, mode='w', header=True, index=False, encoding="utf-8")
         
         if ozvat_se:
+            # Uložíme telefon i e-mail do vnitřní databáze úkolů, aby je ČÁST 11 mohla hned prokliknout
             novy_ukol = {
                 "Termín": ozvat_se.strftime('%d.%m.%Y'), 
-                "Klient": ciste_jmeno[:80], 
+                "Klient": ciste_jmeno[:120], 
                 "Telefon": cisty_tel if cisty_tel else "Nezadáno", 
                 "Email": cisty_mail if cisty_mail else "Nezadáno", 
                 "Důvod (Kvůli čemu)": f"Slevy: {slevy_data['sleva']}. {poznamka}"
@@ -293,12 +295,10 @@ def vykresli_aplikaci():
         try:
             df_hist_download = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
             csv_data_data = df_hist_download.to_csv(index=False, encoding="utf-8")
-            # 🟢 UPGRADE: Pevný, jasný a neměnný název staženého souboru pro snadné nalezení v mobilu
             st.download_button(label="📥 STÁHNOUT ZÁLOHU DENÍKU (.CSV)", data=csv_data_data, file_name="routereport_zaloha.csv", mime="text/csv", use_container_width=True)
         except: pass
             
     with st.expander("📤 Obnovit deník ze starší zálohy (.csv)"):
-        # 🟢 UPGRADE: Přehledná textová instrukce pro Samsung, kde přesně soubor v paměti hledat
         st.markdown("<small>💡 <i>Tip: V telefonu soubor hledejte ve složce <b>Stažené soubory (Downloads)</b> pod názvem <b>routereport_zaloha.csv</b>.</i></small>", unsafe_allow_html=True)
         soubor_zalohy = st.file_uploader("Vyberte stažený soubor zálohy:", type=["csv"])
         if soubor_zalohy is not None:
@@ -325,33 +325,36 @@ def vykresli_aplikaci():
                     except: status_badge = "🟢 V plánu"
                     
                     with st.container(border=True):
-                        cisty_vzhled_klienta = str(row_u['Klient']).replace("nan", "").replace("|", " ").strip()
+                        # 🟢 VYČIŠTĚNÍ DISPLEJE: Odstraníme "nan" a ošklivé znaky rovnou z textu karty
+                        cisty_vzhled_klienta = str(row_u['Klient']).replace("nan", "").replace("|", " ").replace("  ", " ").strip()
                         st.markdown(f"**{status_badge}** | 📅 {row_u['Termín']} | 🏢 **{cisty_vzhled_klienta}**")
                         st.markdown(f"📝 Důvod: {row_u['Důvod (Kvůli čemu)']}")
                         
+                        # 🟢 HLOUBKOVÝ SRENING: Najde jakékoliv telefonní číslo ukryté uvnitř celé karty
                         cely_balik_textu = str(row_u['Klient']) + " " + str(row_u.get('Telefon', '')) + " " + str(row_u.get('Email', ''))
                         cely_balik_textu = cely_balik_textu.replace("nan", "").replace("|", " ")
                         
-                        nalezeny_tel, nalezeny_mail = "", ""
+                        nalezeny_tel = ""
+                        nalezeny_mail = ""
                         for slovo in cely_balik_textu.split():
                             if "@" in slovo:
-                                max_len = slovo.strip(".,()[]")
+                                nalezeny_mail = slovo.strip(".,()[]{}")
                             else:
-                                ciste_slovo = slovo.replace(" ", "").replace("-", "").strip(".,()[]|")
+                                ciste_slovo = slovo.replace(" ", "").replace("-", "").replace("(", "").replace(")", "").strip(".,()[]{}|")
                                 if ciste_slovo.replace("+", "").isdigit() and len(ciste_slovo.replace("+", "")) >= 9:
                                     nalezeny_tel = ciste_slovo
                         
                         col_c1, col_c2 = st.columns(2)
                         with col_c1:
                             if nalezeny_tel:
-                                st.markdown(f'<a href="tel:{nalezeny_tel}"><button style="width:100%; height:36px; background-color:#2E7D32; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">📞 VOLAT: {nalezeny_tel}</button></a>', unsafe_allow_html=True)
+                                st.markdown(f'<a href="tel:{nalezeny_tel}" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#2E7D32; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">📞 ZAVOLAT: {nalezeny_tel}</button></a>', unsafe_allow_html=True)
                             else:
-                                st.markdown('<a href="tel:"><button style="width:100%; height:36px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">📞 OTEVŘÍT TELEFON</button></a>', unsafe_allow_html=True)
+                                st.markdown('<a href="tel:" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">📞 OTEVŘÍT TELEFON</button></a>', unsafe_allow_html=True)
                         with col_c2:
-                            if "@" in str(row_u.get('Email', '')):
-                                st.markdown(f'<a href="mailto:{row_u["Email"]}"><button style="width:100%; height:36px; background-color:#1565C0; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">✉️ E-MAIL</button></a>', unsafe_allow_html=True)
+                            if nalezeny_mail:
+                                st.markdown(f'<a href="mailto:{nalezeny_mail}" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#1565C0; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">✉️ E-MAIL</button></a>', unsafe_allow_html=True)
                             else:
-                                st.markdown('<a href="mailto:"><button style="width:100%; height:36px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">✉️ OTEVŘÍT E-MAIL</button></a>', unsafe_allow_html=True)
+                                st.markdown('<a href="mailto:" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">✉️ OTEVŘÍT E-MAIL</button></a>', unsafe_allow_html=True)
                         
                         st.write("")
                         if st.button("✅ Vyřízeno", key=f"del_{idx}", use_container_width=True):
