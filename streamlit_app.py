@@ -47,7 +47,7 @@ LANG = {
         "note_lbl": "Napište průběh jednání nebo výsledek návštěvy:",
         "remind_check": "🔔 Naplánovat termín příštího kontaktu (Vnitřní připomínka)",
         "remind_date": "Kdy se ozvat znovu:",
-        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVĚ",
+        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVÊ",
         "save_success": "✅ Info o návštěvě úspěšně uloženo!",
         "copy_title": "📋 Text ke zkopírování:",
         "out_date": "📅 DATUM A ČAS",
@@ -91,22 +91,28 @@ def nacti_trvale_ulozeny_adresar():
         try: return pd.read_csv(ULOZENY_ADRESAR_FILE, dtype=str)
         except: pass
     return None
-def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy_data, poznamka, jazyk):
+def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy_data, poznamka, jazyk, surovy_radek_klienta=None):
     oddelovac = "=" * 45
     t = LANG[jazyk]
     
     ciste_jmeno = str(klient_vystup).replace(" | ", " ").strip()
     
-    # 🟢 AKTUALIZACE: Prohledáme text řádku a vytáhneme telefon i e-mail z originálních sloupců
+    # 🟢 DEFINITIVNÍ OPRAVA: Projdeme kompletní řádek o délce 14 sloupců a přesně roztřídíme telefony od e-mailů
     cisty_tel, cisty_mail = "", ""
-    for prvek in ciste_jmeno.split():
-        if "@" in prvek: 
-            cisty_mail = prvek
-        else:
-            ciste_cislo = prvek.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-            if ciste_cislo.replace("+", "").isdigit() and len(ciste_cislo.replace("+", "")) >= 9:
-                cisty_tel = ciste_cislo
-            
+    if surovy_radek_klienta is not None:
+        for bunka in [str(x).strip() for x in surovy_radek_klienta]:
+            if "@" in bunka:
+                # Našli jsme e-mail (sloupec M)
+                cisty_mail = bunka
+            elif bunka.startswith("http") or bunka.startswith("www."):
+                # Webové stránky ignorujeme, ty volat nechceme
+                pass
+            else:
+                # Čistíme telefonní / mobilní číslo (sloupce K a L)
+                c_tel = bunka.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+                if c_tel.replace("+", "").isdigit() and len(c_tel.replace("+", "")) >= 9:
+                    cisty_tel = c_tel
+
     blok_textu = (
         f"{oddelovac}\n"
         f"{t['out_date']}: {datum.strftime('%d.%m.%Y')} v {cas_text}\n"
@@ -132,7 +138,6 @@ def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy
         else: df_novy.to_csv(HISTORIE_SOUBOR, mode='w', header=True, index=False, encoding="utf-8")
         
         if ozvat_se:
-            # Uložíme telefon i e-mail do vnitřní databáze úkolů, aby je ČÁST 11 mohla hned prokliknout
             novy_ukol = {
                 "Termín": ozvat_se.strftime('%d.%m.%Y'), 
                 "Klient": ciste_jmeno[:120], 
@@ -206,21 +211,27 @@ def vykresli_aplikaci():
     cas_vystup_text = f"{zvolena_hodina}:{zvolen_minuta}"
 
     st.subheader(t["sec_2"])
-    seznam_zakazniku = []
+    seznam_zakazniku, mapa_surovych_radku = [], {}
     for _, row in df_klienti.iterrows():
+        # V seznamu na displeji zobrazujeme jen prvních 6 polí, aby to nebylo moc dlouhé
         krasny_text = " | ".join([str(row.iloc[i]) for i in range(min(len(row), 6)) if row.iloc[i]])
         seznam_zakazniku.append(krasny_text)
+        # Zde do paměti bezpečně uložíme kompletně celý dlouhý řádek (všech 14 sloupců z fotky!)
+        mapa_surovych_radku[krasny_text] = row.tolist()
 
     vybrany_box_text = st.selectbox(t["search_hint"], options=seznam_zakazniku, index=None, placeholder=t["select_prompt"])
     st.caption("✍️ Nebo napište jméno ZCELA NOVÉHO klienta ručně (pokud chybí v adresáři):")
     novy_klient_manualni = st.text_input("Zadejte jméno, telefon nebo město nového kontaktu:", value="", placeholder="Např. Jan Nečas | +420777123456").strip()
 
     finalni_klient_vystup = ""
+    surovy_radek_pro_zápis = None
     if vybrany_box_text:
         finalni_klient_vystup = vybrany_box_text
+        surovy_radek_pro_zápis = mapa_surovych_radku[vybrany_box_text]
         st.success(f"{t['selected_ok']} {finalni_klient_vystup}")
     elif novy_klient_manualni:
         finalni_klient_vystup = f"🆕 {novy_klient_manualni}"
+        surovy_radek_pro_zápis = novy_klient_manualni.split("|")
         st.info(f"✨ Nový kontakt: {novy_klient_manualni}")
     st.subheader(t["sec_3"])
     ch_b2b = st.checkbox(t["b2b_lbl"])
@@ -262,7 +273,7 @@ def vykresli_aplikaci():
                 "sleva": ", ".join(slevy_vystup_list) if slevy_vystup_list else "Není",
                 "konkurence": txt_konkurence if txt_konkurence else "Nezadáno", "potencial": f"{txt_potencial} %" if txt_potencial else "Nezadáno"
             }
-            if zapis_zaznam_na_disk(finalni_klient_vystup, datum_sch, cas_vystup_text, txt_trvani, dt_ozvat, slevy_objekt, txt_poznamka, jazyk):
+            if zapis_zaznam_na_disk(finalni_klient_vystup, datum_sch, cas_vystup_text, txt_trvani, dt_ozvat, slevy_objekt, txt_poznamka, jazyk, surovy_radek_pro_zápis):
                 st.success(t["save_success"])
                 st.rerun()
 
@@ -325,34 +336,22 @@ def vykresli_aplikaci():
                     except: status_badge = "🟢 V plánu"
                     
                     with st.container(border=True):
-                        # 🟢 VYČIŠTĚNÍ DISPLEJE: Odstraníme "nan" a ošklivé znaky rovnou z textu karty
                         cisty_vzhled_klienta = str(row_u['Klient']).replace("nan", "").replace("|", " ").replace("  ", " ").strip()
                         st.markdown(f"**{status_badge}** | 📅 {row_u['Termín']} | 🏢 **{cisty_vzhled_klienta}**")
                         st.markdown(f"📝 Důvod: {row_u['Důvod (Kvůli čemu)']}")
                         
-                        # 🟢 HLOUBKOVÝ SRENING: Najde jakékoliv telefonní číslo ukryté uvnitř celé karty
-                        cely_balik_textu = str(row_u['Klient']) + " " + str(row_u.get('Telefon', '')) + " " + str(row_u.get('Email', ''))
-                        cely_balik_textu = cely_balik_textu.replace("nan", "").replace("|", " ")
-                        
-                        nalezeny_tel = ""
-                        nalezeny_mail = ""
-                        for slovo in cely_balik_textu.split():
-                            if "@" in slovo:
-                                nalezeny_mail = slovo.strip(".,()[]{}")
-                            else:
-                                ciste_slovo = slovo.replace(" ", "").replace("-", "").replace("(", "").replace(")", "").strip(".,()[]{}|")
-                                if ciste_slovo.replace("+", "").isdigit() and len(ciste_slovo.replace("+", "")) >= 9:
-                                    nalezeny_tel = ciste_slovo
+                        tel_val = str(row_u.get('Telefon', '')).strip().replace("nan", "")
+                        mail_val = str(row_u.get('Email', '')).strip().replace("nan", "")
                         
                         col_c1, col_c2 = st.columns(2)
                         with col_c1:
-                            if nalezeny_tel:
-                                st.markdown(f'<a href="tel:{nalezeny_tel}" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#2E7D32; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">📞 ZAVOLAT: {nalezeny_tel}</button></a>', unsafe_allow_html=True)
+                            if tel_val and tel_val != "Nezadáno" and tel_val != "":
+                                st.markdown(f'<a href="tel:{tel_val}" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#2E7D32; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">📞 ZAVOLAT: {tel_val}</button></a>', unsafe_allow_html=True)
                             else:
                                 st.markdown('<a href="tel:" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">📞 OTEVŘÍT TELEFON</button></a>', unsafe_allow_html=True)
                         with col_c2:
-                            if nalezeny_mail:
-                                st.markdown(f'<a href="mailto:{nalezeny_mail}" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#1565C0; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">✉️ E-MAIL</button></a>', unsafe_allow_html=True)
+                            if mail_val and mail_val != "Nezadáno" and mail_val != "":
+                                st.markdown(f'<a href="mailto:{mail_val}" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#1565C0; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">✉️ NAPÍSAT E-MAIL</button></a>', unsafe_allow_html=True)
                             else:
                                 st.markdown('<a href="mailto:" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">✉️ OTEVŘÍT E-MAIL</button></a>', unsafe_allow_html=True)
                         
