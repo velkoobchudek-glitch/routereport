@@ -5,7 +5,7 @@ import sys
 import io
 import urllib.parse
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta
 import streamlit as st
 import pandas as pd
 st.set_page_config(
@@ -21,7 +21,7 @@ UKOLY_SOUBOR = "crm_ukoly_kalendar.csv"
 LANG = {
     "CS": {
         "title": "📱 RouteReport - Poznámky z terénu",
-        "cfg_sec": "⚙️ Nastavení databáze zákazníků a e-mailu",
+        "cfg_sec": "⚙️ Nastavení databáze",
         "cfg_info": "Nahrajte soubor CSV se zákazníky a zadejte e-mail šéfa.",
         "upload_lbl": "Vyberte soubor (pouze CSV):",
         "email_boss_lbl": "E-mailová adresa manažera / šéfa:",
@@ -95,7 +95,7 @@ def zapis_zaznam_na_disk(klient_radek, datum, cas_text, trvani, ozvat_se, slevy_
     oddelovac = "=" * 45
     t = LANG[jazyk]
     klient_vystup = " | ".join([str(x) for x in klient_radek[:6] if x])
-    ciste_jmeno = str(klient_radek[0]).strip() if len(klient_radek) > 0 else "Klient"
+    ciste_jmeno = str(klient_radek).strip() if len(klient_radek) > 0 else "Klient"
     
     cisty_tel = ""
     cisty_mail = ""
@@ -142,7 +142,7 @@ def vykresli_aplikaci():
         try:
             df_kontrol_u = pd.read_csv(UKOLY_SOUBOR, dtype=str)
             if not df_kontrol_u.empty:
-                dnes_str = datetime.now().strftime('%d.%m.%Y')
+                dnes_str = datetime.utcnow().strftime('%d.%m.%Y')
                 shody_dnes = df_kontrol_u[df_kontrol_u["Termín"] == dnes_str]
                 if len(shody_dnes) > 0 and "popup_odkliknuto" not in st.session_state:
                     @st.dialog("🔔 DNEŠNÍ URGENTNÍ ÚKOLY")
@@ -180,13 +180,16 @@ def vykresli_aplikaci():
     st.subheader(t["sec_1"])
     col_d1, col_t_h, col_t_m = st.columns(3)
     
-    import pytz
-    cz_time = datetime.now(pytz.timezone('Europe/Prague'))
-    akt_h, akt_m = cz_time.hour, cz_time.minute
-    zaok_m = int(5 * round(akt_m / 5))
+    # Čistý výpočet času posunutého o 10 minut dopředu bez chybových knihoven
+    cas_ted_plus_10 = datetime.utcnow() + timedelta(hours=2) + timedelta(minutes=10)
+    akt_h = cas_ted_plus_10.hour
+    akt_m = cas_ted_plus_10.minute
+    
+    # Matematické zaokrouhlení minut dolů na nejbližší pětku, aby to sedělo do seznamu
+    zaok_m = int(5 * (akt_m // 5))
     if zaok_m >= 60: zaok_m = 55
 
-    with col_d1: datum_sch = st.date_input(t["date_lbl"], cz_time.date())
+    with col_d1: datum_sch = st.date_input(t["date_lbl"], cas_ted_plus_10.date())
     with col_t_h:
         hodiny_list = [f"{i:02d}" for i in range(24)]
         zvolena_hodina = st.selectbox("Hodina:", hodiny_list, index=akt_h)
@@ -218,10 +221,10 @@ def vykresli_aplikaci():
     with col_z4: m_rozzo = st.checkbox("ROZZO")
     
     zapisane_slevy = {}
-    if m_bbb: zapisane_slevy["BBB"] = st.text_input("Sleva BBB (%):", value="")
-    if m_cyclon: zapisane_slevy["CYCLON"] = st.text_input("Sleva CYCLON (%):", value="")
-    if m_basil: zapisane_slevy["BASIL"] = st.text_input("Sleva BASIL (%):", value="")
-    if m_rozzo: zapisane_slevy["ROZZO"] = st.text_input("Sleva ROZZO (%):", value="")
+    if m_bbb: zapisane_slevy["BBB"] = st.text_input("Sleva BBB (%):", value="", key="sl_bbb")
+    if m_cyclon: zapisane_slevy["CYCLON"] = st.text_input("Sleva CYCLON (%):", value="", key="sl_cyc")
+    if m_basil: zapisane_slevy["BASIL"] = st.text_input("Sleva BASIL (%):", value="", key="sl_bas")
+    if m_rozzo: zapisane_slevy["ROZZO"] = st.text_input("Sleva ROZZO (%):", value="", key="sl_roz")
         
     txt_konkurence = st.text_input(t["competitor_lbl"], value="")
     txt_potencial = st.text_input(t["potential_lbl"], value="")
@@ -230,7 +233,7 @@ def vykresli_aplikaci():
     with col_t1:
         txt_trvani = st.selectbox(t["duration_lbl"], [str(i) for i in range(5, 125, 5)], index=5)
         ch_ozvat = st.checkbox(t["remind_check"])
-        dt_ozvat = st.date_input(t["remind_date"], cz_time.date()) if ch_ozvat else None
+        dt_ozvat = st.date_input(t["remind_date"], (datetime.utcnow() + timedelta(hours=2)).date()) if ch_ozvat else None
     with col_t2: txt_poznamka = st.text_area(t["note_lbl"], height=115)
     st.write("---")
     if st.button(t["btn_save"], use_container_width=True):
@@ -264,17 +267,16 @@ def vykresli_aplikaci():
             st.markdown(f'<a href="{mail_odkaz}" target="_blank"><button style="width:100%; height:52px; background-color:#1E88E5; color:white; border:none; border-radius:5px; font-weight:bold;">✉️ ODESLAT MANAŽEROVI</button></a>', unsafe_allow_html=True)
         except: pass
     st.write("---")
-    st.subheader("📅 Moje nadcházející úkoly (Připomínky)")
+    st.subheader("📅 Moje vnitřní připomínky a úkoly")
     if os.path.exists(UKOLY_SOUBOR):
         try:
             df_ukoly = pd.read_csv(UKOLY_SOUBOR, dtype=str)
             if not df_ukoly.empty:
-                import pytz
-                dnes_dt = datetime.now(pytz.timezone('Europe/Prague')).date()
+                dnes_dt = (datetime.utcnow() + timedelta(hours=2)).date()
                 for idx, row_u in df_ukoly.iterrows():
                     try:
                         t_date = datetime.strptime(row_u["Termín"], "%d.%m.%Y").date()
-                        status_badge = "🔴 HOŘÍ!" if (t_date - django_dt).days < 0 else "🟢 V plánu"
+                        status_badge = "🔴 HOŘÍ!" if (t_date - dnes_dt).days < 0 else "🟢 V plánu"
                     except: status_badge = "🟢 V plánu"
                     with st.container(border=True):
                         st.markdown(f"**{status_badge}** | 📅 {row_u['Termín']} | 🏢 {row_u['Klient']}\n\n📝 Důvod: {row_u['Důvod (Kvůli čemu)']}")
@@ -282,9 +284,9 @@ def vykresli_aplikaci():
                         tel_val = str(row_u['Telefon']).strip() if 'Telefon' in row_u and pd.notna(row_u['Telefon']) else ""
                         mail_val = str(row_u['Email']).strip() if 'Email' in row_u and pd.notna(row_u['Email']) else ""
                         with col_c1:
-                            if tel_val and tel_val != "nan": st.markdown(f'<a href="tel:{tel_val}"><button style="width:100%; height:36px; background-color:#2E7D32; color:white; border:none; border-radius:5px;">📞 VOLAT: {tel_val}</button></a>', unsafe_allow_html=True)
+                            if tel_val and tel_val != "nan" and tel_val != "": st.markdown(f'<a href="tel:{tel_val}"><button style="width:100%; height:36px; background-color:#2E7D32; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">📞 VOLAT: {tel_val}</button></a>', unsafe_allow_html=True)
                         with col_c2:
-                            if mail_val and mail_val != "nan": st.markdown(f'<a href="mailto:{mail_val}"><button style="width:100%; height:36px; background-color:#1565C0; color:white; border:none; border-radius:5px;">✉️ E-MAIL</button></a>', unsafe_allow_html=True)
+                            if mail_val and mail_val != "nan" and mail_val != "": st.markdown(f'<a href="mailto:{mail_val}"><button style="width:100%; height:36px; background-color:#1565C0; color:white; border:none; border-radius:5px; font-weight:bold; font-size:11px;">✉️ E-MAIL</button></a>', unsafe_allow_html=True)
                         if st.button("✅ Vyřízeno", key=f"del_{idx}", use_container_width=True):
                             df_ukoly.drop(df_ukoly.index[idx]).to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
                             st.rerun()
