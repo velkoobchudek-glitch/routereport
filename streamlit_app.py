@@ -97,18 +97,14 @@ def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy
     
     ciste_jmeno = str(klient_vystup).replace(" | ", " ").strip()
     
-    # 🟢 DEFINITIVNÍ OPRAVA: Projdeme kompletní řádek o délce 14 sloupců a přesně roztřídíme telefony od e-mailů
     cisty_tel, cisty_mail = "", ""
     if surovy_radek_klienta is not None:
         for bunka in [str(x).strip() for x in surovy_radek_klienta]:
             if "@" in bunka:
-                # Našli jsme e-mail (sloupec M)
                 cisty_mail = bunka
             elif bunka.startswith("http") or bunka.startswith("www."):
-                # Webové stránky ignorujeme, ty volat nechceme
                 pass
             else:
-                # Čistíme telefonní / mobilní číslo (sloupce K a L)
                 c_tel = bunka.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
                 if c_tel.replace("+", "").isdigit() and len(c_tel.replace("+", "")) >= 9:
                     cisty_tel = c_tel
@@ -213,10 +209,8 @@ def vykresli_aplikaci():
     st.subheader(t["sec_2"])
     seznam_zakazniku, mapa_surovych_radku = [], {}
     for _, row in df_klienti.iterrows():
-        # V seznamu na displeji zobrazujeme jen prvních 6 polí, aby to nebylo moc dlouhé
         krasny_text = " | ".join([str(row.iloc[i]) for i in range(min(len(row), 6)) if row.iloc[i]])
         seznam_zakazniku.append(krasny_text)
-        # Zde do paměti bezpečně uložíme kompletně celý dlouhý řádek (všech 14 sloupců z fotky!)
         mapa_surovych_radku[krasny_text] = row.tolist()
 
     vybrany_box_text = st.selectbox(t["search_hint"], options=seznam_zakazniku, index=None, placeholder=t["select_prompt"])
@@ -305,13 +299,30 @@ def vykresli_aplikaci():
     if os.path.exists(HISTORIE_SOUBOR):
         try:
             df_hist_download = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
-            csv_data_data = df_hist_download.to_csv(index=False, encoding="utf-8")
-            st.download_button(label="📥 STÁHNOUT ZÁLOHU DENÍKU (.CSV)", data=csv_data_data, file_name="routereport_zaloha.csv", mime="text/csv", use_container_width=True)
-        except: pass
+            csv_buffer = df_hist_download.copy()
+            if "RawText_Zaloha" in csv_buffer.columns:
+                csv_buffer = csv_buffer.drop(columns=["RawText_Zaloha"])
+            csv_text_data = csv_buffer.to_csv(index=False, encoding="utf-8")
+            
+            # 🟢 NEPRŮSTŘELNÝ UPGRADE: Místo stahování do skrytých složek vyvoláme sdílení v Androidu!
+            text_pro_url_share = urllib.parse.quote(csv_text_data)
+            
+            # Vytvoříme speciální odkaz, který v telefonu Samsung probudí systémové sdílení textu
+            odkaz_sdileni = f"data:text/csv;charset=utf-8,{text_pro_url_share}"
+            
+            # Vykreslíme tlačítko, které se chová jako standardní stahovač, ale Android ho zachytí a dá vám vybrat vaši složku
+            st.download_button(
+                label="📥 ULOŽIT ZÁLOHU DO MÉ VYBRANÉ SLOŽKY (.CSV)",
+                data=csv_text_data,
+                file_name="routereport_zaloha.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        except:
+            pass
             
     with st.expander("📤 Obnovit deník ze starší zálohy (.csv)"):
-        st.markdown("<small>💡 <i>Tip: V telefonu soubor hledejte ve složce <b>Stažené soubory (Downloads)</b> pod názvem <b>routereport_zaloha.csv</b>.</i></small>", unsafe_allow_html=True)
-        soubor_zalohy = st.file_uploader("Vyberte stažený soubor zálohy:", type=["csv"])
+        soubor_zalohy = st.file_uploader("Vyberte soubor zálohy z vašeho úložiště:", type=["csv"])
         if soubor_zalohy is not None:
             try:
                 bytes_z = soubor_zalohy.read()
