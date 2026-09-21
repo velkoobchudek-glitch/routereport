@@ -47,7 +47,7 @@ LANG = {
         "note_lbl": "Napište průběh jednání nebo výsledek návštěvy:",
         "remind_check": "🔔 Naplánovat termín příštího kontaktu (Vnitřní připomínka)",
         "remind_date": "Kdy se ozvat znovu:",
-        "btn_save": "💾 ULOŽIT INFO O NÁVŠTÊWÊ",
+        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVÊ",
         "save_success": "✅ Info o návštěvě úspěšně uloženo!",
         "copy_title": "📋 Text ke zkopírování:",
         "out_date": "📅 DATUM A ČAS",
@@ -169,6 +169,7 @@ def vykresli_aplikaci():
 
     if "zmena_databaze" not in st.session_state: st.session_state["zmena_databaze"] = False
     df_klienti = nacti_trvale_ulozeny_adresar()
+    
     email_sefa = st.sidebar.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", ""))
     if email_sefa: st.session_state["boss_email"] = email_sefa
 
@@ -278,9 +279,22 @@ def vykresli_aplikaci():
             df_hist = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
             df_zobrazeni = df_hist.copy()
             df_zobrazeni["skutecny_index"] = df_zobrazeni.index
-            df_inverted = df_zobrazeni.iloc[::-1]
             
-            for _, radek_historie in df_inverted.iterrows():
+            # 🟢 KALENDÁŘNÍ ŘAZENÍ: Převedeme textové sloupce na opravdový časový formát Pythonu
+            def parsuj_kalendarne(row_item):
+                try:
+                    return datetime.strptime(f"{row_item['Datum']} {row_item['Čas']}", "%d.%m.%Y %H:%M")
+                except:
+                    return datetime.min
+            
+            df_zobrazeni["Timestamp_Serazeni"] = df_zobrazeni.apply(parsuj_kalendarne, axis=1)
+            # Nejmladší (nejnovější reálný den/hodina) poletí nekompromisně nahoru
+            df_sorted_calendar = df_zobrazeni.sort_values(by="Timestamp_Serazeni", ascending=False)
+            
+            if "RawText_Zaloha" in df_sorted_calendar.columns:
+                df_sorted_calendar = df_sorted_calendar.drop(columns=["RawText_Zaloha", "Timestamp_Serazeni"])
+                
+            for _, radek_historie in df_sorted_calendar.iterrows():
                 puvodni_radek_id = int(radek_historie["skutecny_index"])
                 with st.container(border=True):
                     st.markdown(f"📅 **{radek_historie['Datum']} {radek_historie['Čas']}** | 🏢 **{radek_historie['Klient']}**")
