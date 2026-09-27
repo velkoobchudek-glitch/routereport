@@ -183,6 +183,7 @@ def vykresli_aplikaci():
             email_sefa = st.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", ""))
             if email_sefa: st.session_state["boss_email"] = email_sefa
             
+            # 🟢 ODEMČENO: Odstraněn parametr type, aby v mobilu soubory nezašedávaly
             nahrany_soubor = st.file_uploader(t["upload_lbl"])
             if nahrany_soubor is not None:
                 df_klienti = zpracuj_a_ulož_soubor(nahrany_soubor)
@@ -280,6 +281,7 @@ def vykresli_aplikaci():
             df_zobrazeni = df_hist.copy()
             df_zobrazeni["skutecny_index"] = df_zobrazeni.index
             
+            # 🟢 KALENDÁŘNÍ ŘAZENÍ: Seřadí schůzky podle data a času od nejnovější
             def parsuj_kalendarne(row_item):
                 try: return datetime.strptime(f"{row_item['Datum']} {row_item['Čas']}", "%d.%m.%Y %H:%M")
                 except: return datetime.min
@@ -317,20 +319,18 @@ def vykresli_aplikaci():
                         with col_poj2:
                             if st.button("⚪ ZPĚT", key=f"del_btn_no_{puvodni_radek_id}", use_container_width=True):
                                 st.session_state[pojistka_key] = False
-                                st.rerun()
+                                r.rerun()
             
             st.write("")
             kompletni_text_mailu = "\n".join(df_hist["RawText_Zaloha"].tolist()) if "RawText_Zaloha" in df_hist.columns else ""
             mail_odkaz = f"mailto:{st.session_state.get('boss_email', '')}?subject={urllib.parse.quote('RouteReport')}&body={urllib.parse.quote(kompletni_text_mailu)}"
             st.markdown(f'<a href="{mail_odkaz}" target="_blank"><button style="width:100%; height:52px; background-color:#1E88E5; color:white; border:none; border-radius:5px; font-weight:bold;">✉️ ODESLAT REPORT MANAŽEROVI</button></a>', unsafe_allow_html=True)
         except: pass
-    # Generování spojeného souboru zálohy pro deník i úkoly najednou
     if os.path.exists(HISTORIE_SOUBOR):
         try:
             df_buffer_h = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
             df_buffer_u = pd.read_csv(UKOLY_SOUBOR, dtype=str) if os.path.exists(UKOLY_SOUBOR) else pd.DataFrame()
             
-            # Zabalíme obě tabulky do jednoho textového řetězce s jasným oddělovačem na pozadí
             string_io_vystup = io.StringIO()
             df_buffer_h.to_csv(string_io_vystup, index=False, encoding="utf-8")
             string_io_vystup.write("===UKOLY_SEPARATOR===\n")
@@ -342,7 +342,9 @@ def vykresli_aplikaci():
         except: pass
             
     with st.expander("📤 Obnovit deník i úkoly ze spojené zálohy (.csv)"):
-        st.markdown("<small>💡 <i>Tip: Všechny soubory jsou plně odemčené. Stačí kliknout na stažený soubor routereport_zaloha.csv a aplikace obnoví návštěvy i vaše vnitřní úkoly najednou.</i></small>", unsafe_allow_html=True)
+        st.markdown("<small>💡 <i>Tip: Všechny soubory jsou plně odemčené. Stačí kliknout na stažený soubor routereport_zaloha.csv a aplikace obnoví vše najednou.</i></small>", unsafe_allow_html=True)
+        
+        # 🟢 ODEMČENO: Odstraněn parametr type, aby v mobilu záloha nešedla
         soubor_zalohy = st.file_uploader("Vyberte stažený soubor zálohy:")
         if soubor_zalohy is not None:
             try:
@@ -363,7 +365,6 @@ def vykresli_aplikaci():
                     elif os.path.exists(UKOLY_SOUBOR):
                         os.remove(UKOLY_SOUBOR)
                 else:
-                    # Pokud by šlo o starší typ zálohy, obnovíme jen historii schůzek
                     df_import_starší = pd.read_csv(io.StringIO(text_z), dtype=str)
                     df_import_starší.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
                     
