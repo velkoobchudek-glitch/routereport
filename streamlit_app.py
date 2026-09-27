@@ -23,7 +23,7 @@ UZIVATEL_SOUBOR = "crm_profil_uzivatele.csv"
 LANG = {
     "CS": {
         "title": "📱 RouteReport - Poznámky z terénu",
-        "cfg_sec": "⚙️ Globální nastavení systému (Značky / Profil / Adresy)",
+        "cfg_sec": "⚙️ Globální nastavení systému a profilu",
         "cfg_info": "Zadejte konfiguraci značek, e-mail manažera, jméno reportéra a nahrajte adresář.",
         "upload_lbl": "KROK 3: Vyberte soubor s klienty z Pohody (CSV):",
         "email_boss_lbl": "E-mailová adresa manažera / šéfa:",
@@ -49,7 +49,7 @@ LANG = {
         "note_lbl": "Napište průběh jednání nebo výsledek návštěvy:",
         "remind_check": "🔔 Naplánovat termín příštího kontaktu (Vnitřní připomínka)",
         "remind_date": "Kdy se ozvat znovu:",
-        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVÊ",
+        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVĚ",
         "save_success": "✅ Info o návštěvě úspěšně uloženo!",
         "copy_title": "📋 Text ke zkopírování:",
         "out_date": "📅 DATUM A ČAS",
@@ -224,7 +224,6 @@ def vykresli_aplikaci():
     if "brand_name_3" not in st.session_state: st.session_state["brand_name_3"] = "ROZZO"
     if "brand_name_4" not in st.session_state: st.session_state["brand_name_4"] = ""
 
-    # 🟢 1. OBRÁZEK: Profil obchodníka odsud nadobro zmizel! Už se ukáže čistě jen uvnitř expanderu nastavení
     if df_klienti is not None and not st.session_state["zmena_databaze"]:
         st.success(t["db_loaded_ok"])
         if st.button(t["db_change_btn"], use_container_width=True):
@@ -240,6 +239,7 @@ def vykresli_aplikaci():
                 uloz_profil_uzivatele(u_jmeno.strip(), u_tel.strip())
 
             st.markdown("### ⚙️ 2. Pojmenování produktových řad / značek")
+            st.caption("💡 Nechte políčko prázdné, pokud značku nechcete v aplikaci vůbec ukazovat.")
             col_b1, col_b2 = st.columns(2)
             with col_b1:
                 b1 = st.text_input("Název Značky 1:", value=st.session_state["brand_name_1"])
@@ -419,8 +419,7 @@ def vykresli_aplikaci():
         soubor_zalohy_spodní = st.file_uploader("Vyberte stažený soubor routereport_zaloha.csv:", key="bottom_backup_uploader_clean")
         if soubor_zalohy_spodní is not None:
             if obnov_data_ze_zalohy_backend(soubor_zalohy_spodní):
-                st.success("✅ Záloha úspěšně nahrána do programu!")
-                time.sleep(0.5)
+                # 🟢 CHYBA 1 OPRAVENA: Okamžitý automatický restart – záloha i úkoly se objeví ihned bez klikání na aktualizaci stránky!
                 st.rerun()
 
     st.write("")
@@ -438,8 +437,6 @@ def vykresli_aplikaci():
                     if os.path.exists(HISTORIE_SOUBOR): os.remove(HISTORIE_SOUBOR)
                     if os.path.exists(EXPORT_FILE): os.remove(EXPORT_FILE)
                     st.session_state["confirm_wipe_out_all"] = False
-                    st.success("Deník návštěv vyčištěn! Připomínky drží dál. 👍")
-                    time.sleep(1)
                     st.rerun()
             with c_w2:
                 if st.button("⚪ ZPĚT", use_container_width=True, key="btn_wipe_no"):
@@ -476,15 +473,28 @@ def vykresli_aplikaci():
                             else: st.markdown('<a href="mailto:" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">✉️ OTEVŘÍT E-MAIL</button></a>', unsafe_allow_html=True)
                         
                         st.write("")
-                        # 🟢 2. OBRÁZEK OPRAVEN: Kompletně zrušena otravná pojistka! Jedno jediné kliknutí úkol natvrdo smaže z disku!
-                        if st.button("✅ Vyřízeno", key=f"instant_clear_task_{t_id}", use_container_width=True):
-                            if "TaskID" in df_ukoly.columns:
-                                df_upravene_ukoly = df_ukoly[df_ukoly["TaskID"] != t_id]
-                            else:
-                                df_upravene_ukoly = df_ukoly.drop(df_ukoly.index[idx])
-                            df_upravene_ukoly.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
-                            st.success("Úkol úspěšně vyřízen a smazán!")
-                            st.rerun()
+                        # 🟢 CHYBA 2 OPRAVENA: Čistá dvoukroková pojistka přesně podle vašeho zadání! Tlačítko se nemaže samo do sebe.
+                        pojistka_u_key = f"confirm_task_wipe_{t_id}"
+                        if pojistka_u_key not in st.session_state: st.session_state[pojistka_u_key] = False
+                        
+                        if not st.session_state[pojistka_u_key]:
+                            if st.button("🗑️ Vyřídit úkol", key=f"init_del_task_{t_id}", use_container_width=True):
+                                st.session_state[pojistka_u_key] = True
+                                st.rerun()
+                        else:
+                            st.warning("⚠️ Opravdu chcete vyřídit?")
+                            col_tsk1, col_tsk2 = st.columns(2)
+                            with col_tsk1:
+                                if st.button("🟢 ANO, VYMAZAT", key=f"yes_del_task_{t_id}", use_container_width=True):
+                                    if "TaskID" in df_ukoly.columns: df_upravene_ukoly = df_ukoly[df_ukoly["TaskID"] != t_id]
+                                    else: df_upravene_ukoly = df_ukoly.drop(df_ukoly.index[idx])
+                                    df_upravene_ukoly.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
+                                    st.session_state[pojistka_u_key] = False
+                                    st.rerun()
+                            with col_tsk2:
+                                if st.button("⚪ ZPĚT", key=f"no_del_task_{t_id}", use_container_width=True):
+                                    st.session_state[pojistka_u_key] = False
+                                    st.rerun()
             else: st.caption("Žádné připomínky.")
         except: st.caption("Žádné připomínky.")
     else: st.caption("Žádné připomínky.")
