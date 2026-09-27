@@ -23,12 +23,12 @@ UZIVATEL_SOUBOR = "crm_profil_uzivatele.csv"
 LANG = {
     "CS": {
         "title": "📱 RouteReport - Poznámky z terénu",
-        "cfg_sec": "⚙️ Globální nastavení systému a licencí",
-        "cfg_info": "Zadejte konfiguraci značek, e-mail manažera a nahrajte adresář.",
-        "upload_lbl": "KROK 2: Vyberte soubor s klienty z Pohody (CSV):",
+        "cfg_sec": "⚙️ Globální nastavení systému a profilu",
+        "cfg_info": "Zadejte konfiguraci značek, e-mail manažera, jméno reportéra a nahrajte adresář.",
+        "upload_lbl": "KROK 3: Vyberte soubor s klienty z Pohody (CSV):",
         "email_boss_lbl": "E-mailová adresa manažera / šéfa:",
         "db_loaded_ok": "✅ Systém je plně nakonfigurován a připraven k práci.",
-        "db_change_btn": "⚙️ OTEVŘÍT GLOBÁLNÍ NASTAVENÍ SYSTÉMU (ZNAČKY / EMAILY / ADRESY)",
+        "db_change_btn": "⚙️ OTEVŘÍT GLOBÁLNÍ NASTAVENÍ SYSTÉMU (ZNAČKY / PROFIL / ADRESY)",
         "sec_1": "1. Datum, čas a trvání návštěvy",
         "date_lbl": "Datum:",
         "time_lbl": "Čas návštěvy (Hodina / Minuta):",
@@ -121,9 +121,10 @@ def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy
                 c_tel = bunka.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
                 if c_tel.replace("+", "").isdigit() and len(c_tel.replace("+", "")) >= 9: cisty_tel = c_tel
 
+    # 🟢 ZÁHLAVÍ REPORTU: Jméno a telefon jsou schované zde a odesílají se automaticky šéfovi
     blok_textu = (
         f"{oddelovac}\n"
-        f"👤 OBCHODNÍK:  {prof.get('jmeno', 'Nezadáno')} ({prof.get('telefon', '---')})\n"
+        f"👤 REPORTÉRE: {prof.get('jmeno', 'Nezadáno')} ({prof.get('telefon', '---')})\n"
         f"{t['out_date']}: {datum.strftime('%d.%m.%Y')} v {cas_text}\n"
         f"{t['out_dur']}:      {trvani} min \n"
         f"{t['out_client']}:      {klient_vystup}\n"
@@ -132,7 +133,7 @@ def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy
         f"{t['out_comp']}:  {slevy_data['konkurence']}\n"
         f"{t['out_pot']}:   {slevy_data['potencial']}\n"
         f"{t['out_note']}:    {poznamka if poznamka else '...'}\n"
-        f"{t['out_remind']}:    {ozvat_se.strftime('%d.%m.%Y') if ozvat_se else '---'}\n"
+        f"{t['out_remind']}:    {ozvat_se.strftime('%d.%m('%d.%m.%Y') if ozvat_se else '---'}\n"
         f"{oddelovac}\n\n"
     )
     try:
@@ -212,13 +213,7 @@ def vykresli_aplikaci():
     if "brand_name_3" not in st.session_state: st.session_state["brand_name_3"] = "ROZZO"
     if "brand_name_4" not in st.session_state: st.session_state["brand_name_4"] = ""
 
-    with st.container(border=True):
-        st.markdown("### 👤 Profil obchodního zástupce")
-        col_p1, col_p2 = st.columns(2)
-        with col_p1: u_jmeno = st.text_input("Moje Jméno a Příjmení:", value=prof.get("jmeno", ""))
-        with col_p2: u_tel = st.text_input("Můj Firemní Telefon:", value=prof.get("telefon", ""))
-        if u_jmeno != prof.get("jmeno") or u_tel != prof.get("telefon"): uloz_profil_uzivatele(u_jmeno.strip(), u_tel.strip())
-
+    # 🟢 1. OBRÁZEK: Šedý box na ploše je kompletně vymazán!
     if df_klienti is not None and not st.session_state["zmena_databaze"]:
         st.success(t["db_loaded_ok"])
         if st.button(t["db_change_btn"], use_container_width=True):
@@ -226,7 +221,14 @@ def vykresli_aplikaci():
             st.rerun()
     else:
         with st.expander(t["cfg_sec"], expanded=True):
-            st.markdown("### ⚙️ 1. Pojmenování produktových řad / značek")
+            st.markdown("### 👤 1. Nastavení Profilu obchodního zástupce")
+            col_p1, col_p2 = st.columns(2)
+            with col_p1: u_jmeno = st.text_input("Moje Jméno a Příjmení:", value=prof.get("jmeno", "Jakub Holan"))
+            with col_p2: u_tel = st.text_input("Můj Firemní Telefon:", value=prof.get("telefon", "608470900"))
+            if u_jmeno != prof.get("jmeno") or u_tel != prof.get("telefon"):
+                uloz_profil_uzivatele(u_jmeno.strip(), u_tel.strip())
+
+            st.markdown("### ⚙️ 2. Pojmenování produktových řad / značek")
             st.caption("💡 Nechte políčko prázdné, pokud značku nechcete v aplikaci vůbec ukazovat.")
             col_b1, col_b2 = st.columns(2)
             with col_b1:
@@ -240,11 +242,11 @@ def vykresli_aplikaci():
             st.session_state["brand_name_3"] = b3.strip()
             st.session_state["brand_name_4"] = b4.strip()
 
-            st.markdown("### ✉️ 2. Nastavení reportů")
+            st.markdown("### ✉️ 3. Nastavení reportů")
             email_sefa = st.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", "manager@firma.cz"))
             if email_sefa: st.session_state["boss_email"] = email_sefa
             
-            st.markdown("### 🏢 3. Aktivace databáze")
+            st.markdown("### 🏢 4. Aktivace databáze")
             nahrany_soubor = st.file_uploader(t["upload_lbl"])
             if nahrany_soubor is not None:
                 df_klienti = zpracuj_a_ulož_soubor(nahrany_soubor)
@@ -314,8 +316,9 @@ def vykresli_aplikaci():
     st.subheader(t["sec_4"])
     col_t1, col_t2 = st.columns(2)
     with col_t1:
-        # 🟢 OPRAVA MINUT: Doba trvání schůzky je zafixována na výchozích 10 minut přesně podle fotky z terénu!
-        txt_trvani = st.selectbox(t["duration_lbl"], [str(i) for i in range(5, 125, 5)], index=[str(i) for i in range(5, 125, 5)].index("10"))
+        # 🟢 2. OBRÁZEK: Vyřazeny pětiminutové zbytečnosti, skáče to čistě po desítkách: 10, 20, 30, 40... s výchozí 10!
+        desitkove_intervaly = ["10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "110", "120"]
+        txt_trvani = st.selectbox(t["duration_lbl"], desitkove_intervaly, index=0)
         ch_ozvat = st.checkbox(t["remind_check"])
         dt_ozvat = st.date_input(t["remind_date"], (datetime.utcnow() + timedelta(hours=2)).date()) if ch_ozvat else None
     with col_t2: txt_poznamka = st.text_area(t["note_lbl"], height=115)
@@ -464,11 +467,29 @@ def vykresli_aplikaci():
                             else: st.markdown('<a href="mailto:" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">✉️ OTEVŘÍT E-MAIL</button></a>', unsafe_allow_html=True)
                         
                         st.write("")
-                        if st.button("✅ Vyřízeno", key=f"del_task_btn_{t_id}", use_container_width=True):
-                            if "TaskID" in df_ukoly.columns: df_upravene_ukoly = df_ukoly[df_ukoly["TaskID"] != t_id]
-                            else: df_upravene_ukoly = df_ukoly.drop(df_ukoly.index[idx])
-                            df_upravene_ukoly.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
-                            st.rerun()
+                        # 🟢 3. OBRÁZEK: Přidána neprůstřelná dvoukroková zelená pojistka pro vyřízení úkolu!
+                        pojistka_u_key = f"confirm_task_wipe_{t_id}"
+                        if pojistka_u_key not in st.session_state: st.session_state[pojistka_u_key] = False
+                        
+                        if not st.session_state[pojistka_u_key]:
+                            if st.button("✅ Vyřízeno", key=f"init_del_task_{t_id}", use_container_width=True):
+                                st.session_state[pojistka_u_key] = True
+                                st.rerun()
+                        else:
+                            st.warning("🟢 Opravdu přesunout tento úkol do vyřízených?")
+                            col_tsk1, col_tsk2 = st.columns(2)
+                            with col_tsk1:
+                                if st.button("🟢 ANO, POTVRDIT", key=f"yes_del_task_{t_id}", use_container_width=True):
+                                    if "TaskID" in df_ukoly.columns: df_upravene_ukoly = df_ukoly[df_ukoly["TaskID"] != t_id]
+                                    else: df_upravene_ukoly = df_ukoly.drop(df_ukoly.index[idx])
+                                    df_upravene_ukoly.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
+                                    st.session_state[pojistka_u_key] = False
+                                    st.rerun()
+                            with col_tsk2:
+                                if st.button("⚪ ZPĚT", key=f"no_del_task_{t_id}", use_container_width=True):
+                                    st.session_state[pojistka_key] = False
+                                    st.session_state[pojistka_u_key] = False
+                                    st.rerun()
             else: st.caption("Žádné připomínky.")
         except: st.caption("Žádné připomínky.")
     else: st.caption("Žádné připomínky.")
