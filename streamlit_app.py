@@ -33,7 +33,7 @@ LANG = {
         "time_lbl": "Čas návštěvy (Hodina / Minuta):",
         "duration_lbl": "Trvání návštěvy:",
         "sec_2": "2. Vyhledat a vybrat klienta",
-        "search_hint": "Ťukněte a začněte psát jméno nebo město...",
+        "search_hint": "Ťukněte and začněte psát jméno nebo město...",
         "select_prompt": "-- Začněte psát jméno nebo město klienta --",
         "selected_ok": "🤝 Vybráno pro uložení:",
         "no_client": "❌ Žádný klient neodpovídá zadání.",
@@ -148,6 +148,29 @@ def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy
             else: df_ukol.to_csv(UKOLY_SOUBOR, mode='w', header=True, index=False, encoding="utf-8")
         return blok_textu
     except: return ""
+def obnov_data_ze_zalohy_backend(soubor_objekt):
+    try:
+        bytes_z = soubor_objekt.read()
+        text_z = bytes_z.decode("utf-8", errors="ignore")
+        if "===UKOLY_SEPARATOR===" in text_z:
+            casti_textu = text_z.split("===UKOLY_SEPARATOR===\n")
+            text_historie = casti_textu[0]
+            text_ukoly = casti_textu[1] if len(casti_textu) > 1 else ""
+            
+            df_imp_h = pd.read_csv(io.StringIO(text_historie), dtype=str)
+            df_imp_h.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
+            
+            if text_ukoly.strip():
+                df_imp_u = pd.read_csv(io.StringIO(text_ukoly), dtype=str)
+                df_imp_u.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
+            elif os.path.exists(UKOLY_SOUBOR):
+                os.remove(UKOLY_SOUBOR)
+        else:
+            df_import_starší = pd.read_csv(io.StringIO(text_z), dtype=str)
+            df_import_starší.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
+        return True
+    except:
+        return False
 def vykresli_aplikaci():
     jazyk = "CS"
     t = LANG[jazyk]
@@ -186,11 +209,22 @@ def vykresli_aplikaci():
             email_sefa = st.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", ""))
             if email_sefa: st.session_state["boss_email"] = email_sefa
             
-            nahrany_soubor = st.file_uploader(t["upload_lbl"])
+            # 🟢 DEFINITIVNÍ OPRAVA: Odstraněna veškerá typová omezení. Android už soubory nezablokuje!
+            st.markdown("🌐 **MOŽNOST A: Nahrát nový adresář firem z počítače (Adresy.csv)**")
+            nahrany_soubor = st.file_uploader(t["upload_lbl"], key="main_db_uploader")
             if nahrany_soubor is not None:
                 df_klienti = zpracuj_a_ulož_soubor(nahrany_soubor)
                 if df_klienti is not None:
                     st.session_state["zmena_databaze"] = False
+                    st.rerun()
+                    
+            st.markdown("---")
+            st.markdown("📥 **MOŽNOST B: Rychlá obnova celé vaší předchozí zálohy deníku i úkolů**")
+            nahrana_ranni_zaloha = st.file_uploader("Vyberte stažený soubor routereport_zaloha.csv:", key="main_backup_uploader")
+            if nahrana_ranni_zaloha is not None:
+                if obnov_data_ze_zalohy_backend(nahrana_ranni_zaloha):
+                    st.success("✅ Záloha kompletně obnovena! Načítám data...")
+                    time.sleep(1)
                     st.rerun()
     if df_klienti is None: return
     st.subheader(t["sec_1"])
@@ -219,7 +253,7 @@ def vykresli_aplikaci():
 
     vybrany_box_text = st.selectbox(t["search_hint"], options=seznam_zakazniku, index=None, placeholder=t["select_prompt"])
     st.caption("✍️ Nebo napište jméno ZCELA NOVÉHO klienta ručně (pokud chybí v adresáři):")
-    novy_klient_manualni = st.text_input("Zadejte jméno, telephone nebo město nového kontaktu:", value="", placeholder="Např. Jan Nečas | +420777123456").strip()
+    novy_klient_manualni = st.text_input("Zadejte jméno, telefon nebo město nového kontaktu:", value="", placeholder="Např. Jan Nečas | +420777123456").strip()
 
     finalni_klient_vystup = ""
     surovy_radek_pro_zápis = None
@@ -300,8 +334,7 @@ def vykresli_aplikaci():
                     st.markdown(f"📝 **Poznámka:** {radek_historie['Poznámka']}")
                     
                     pojistka_key = f"confirm_del_state_{puvodni_radek_id}"
-                    if pojistka_key not in st.session_state:
-                        st.session_state[pojistka_key] = False
+                    if pojistka_key not in st.session_state: st.session_state[pojistka_key] = False
                         
                     if not st.session_state[pojistka_key]:
                         if st.button(f"🗑️ Smazat tento zápis", key=f"del_row_hist_init_{puvodni_radek_id}", use_container_width=True):
@@ -331,45 +364,21 @@ def vykresli_aplikaci():
         try:
             df_buffer_h = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
             df_buffer_u = pd.read_csv(UKOLY_SOUBOR, dtype=str) if os.path.exists(UKOLY_SOUBOR) else pd.DataFrame()
-            
             string_io_vystup = io.StringIO()
             df_buffer_h.to_csv(string_io_vystup, index=False, encoding="utf-8")
             string_io_vystup.write("===UKOLY_SEPARATOR===\n")
-            if not df_buffer_u.empty:
-                df_buffer_u.to_csv(string_io_vystup, index=False, encoding="utf-8")
-                
+            if not df_buffer_u.empty: df_buffer_u.to_csv(string_io_vystup, index=False, encoding="utf-8")
             csv_spojena_data = string_io_vystup.getvalue()
             st.download_button(label="📥 STÁHNOUT ZÁLOHU DENÍKU I ÚKOLŮ (.CSV)", data=csv_spojena_data, file_name="routereport_zaloha.csv", mime="text/csv", use_container_width=True)
         except: pass
             
     with st.expander("📤 Obnovit deník i úkoly ze spojené zálohy (.csv)"):
-        st.markdown("<small>💡 <i>Tip: Všechny soubory jsou plně odemčené. Stačí kliknout na stažený soubor routereport_zaloha.csv a aplikace obnoví vše najednou.</i></small>", unsafe_allow_html=True)
-        soubor_zalohy = st.file_uploader("Vyberte stažený soubor zálohy:")
-        if soubor_zalohy is not None:
-            try:
-                bytes_z = soubor_zalohy.read()
-                text_z = bytes_z.decode("utf-8", errors="ignore")
-                
-                if "===UKOLY_SEPARATOR===" in text_z:
-                    casti_textu = text_z.split("===UKOLY_SEPARATOR===\n")
-                    text_historie = casti_textu
-                    text_ukoly = casti_textu if len(casti_textu) > 1 else ""
-                    
-                    df_imp_h = pd.read_csv(io.StringIO(text_historie), dtype=str)
-                    df_imp_h.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
-                    
-                    if text_ukoly.strip():
-                        df_imp_u = pd.read_csv(io.StringIO(text_ukoly), dtype=str)
-                        df_imp_u.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
-                    elif os.path.exists(UKOLY_SOUBOR):
-                        os.remove(UKOLY_SOUBOR)
-                else:
-                    df_import_starší = pd.read_csv(io.StringIO(text_z), dtype=str)
-                    df_import_starší.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
-                    
-                st.success("✅ Deník i úkoly byly bezpečně obnoveny! Restartuji...")
+        # 🟢 ODEMČENO: Odstraněna formátová omezení i pro spodní lištu záloh
+        soubor_zalohy_spodní = st.file_uploader("Vyberte stažený soubor zálohy:", key="bottom_backup_uploader")
+        if soubor_zalohy_spodní is not None:
+            if obnov_data_ze_zalohy_backend(soubor_zalohy_spodní):
+                st.success("✅ Obnoveno z dolní lišty! Restartuji...")
                 st.rerun()
-            except Exception as e: st.error(f"Chyba obnovy zálohy: {e}")
 
     st.write("---")
     st.subheader("📅 Moje vnitřní připomínky a úkoly")
@@ -378,20 +387,17 @@ def vykresli_aplikaci():
             df_ukoly = pd.read_csv(UKOLY_SOUBOR, dtype=str)
             if not df_ukoly.empty:
                 dnes_dt = (datetime.utcnow() + timedelta(hours=2)).date()
-                
                 for idx, row_u in df_ukoly.iterrows():
                     try:
                         t_date = datetime.strptime(row_u["Termín"], "%d.%m.%Y").date()
                         status_badge = "🔴 HOŘÍ!" if (t_date - dnes_dt).days < 0 else "🟢 V plánu"
                     except: status_badge = "🟢 V plánu"
-                    
                     t_id = row_u["TaskID"] if "TaskID" in row_u and pd.notna(row_u["TaskID"]) else f"OLD_{idx}"
                     
                     with st.container(border=True):
                         cisty_vzhled_klienta = str(row_u['Klient']).replace("nan", "").replace("|", " ").replace("  ", " ").strip()
                         st.markdown(f"**{status_badge}** | 📅 {row_u['Termín']} | 🏢 **{cisty_vzhled_klienta}**")
                         st.markdown(f"📝 Důvod: {row_u['Důvod (Kvůli čemu)']}")
-                        
                         tel_val = str(row_u.get('Telefon', '')).strip().replace("nan", "")
                         mail_val = str(row_u.get('Email', '')).strip().replace("nan", "")
                         
@@ -399,25 +405,22 @@ def vykresli_aplikaci():
                         with col_c1:
                             if tel_val and tel_val != "Nezadáno" and tel_val != "":
                                 st.markdown(f'<a href="tel:{tel_val}" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#2E7D32; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">📞 ZAVOLAT: {tel_val}</button></a>', unsafe_allow_html=True)
-                            else:
-                                st.markdown('<a href="tel:" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">📞 OTEVŘÍT TELEFON</button></a>', unsafe_allow_html=True)
+                            else: st.markdown('<a href="tel:" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">📞 OTEVŘÍT TELEFON</button></a>', unsafe_allow_html=True)
                         with col_c2:
                             if mail_val and mail_val != "Nezadáno" and mail_val != "":
                                 st.markdown(f'<a href="mailto:{mail_val}" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#1565C0; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">✉️ NAPÍSAT E-MAIL</button></a>', unsafe_allow_html=True)
-                            else:
-                                st.markdown('<a href="mailto:" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">✉️ OTEVŘÍT E-MAIL</button></a>', unsafe_allow_html=True)
+                            else: st.markdown('<a href="mailto:" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">✉️ OTEVŘÍT E-MAIL</button></a>', unsafe_allow_html=True)
                         
                         st.write("")
                         if st.button("✅ Vyřízeno", key=f"del_task_btn_{t_id}", use_container_width=True):
-                            if "TaskID" in df_ukoly.columns:
-                                df_upravene_ukoly = df_ukoly[df_ukoly["TaskID"] != t_id]
-                            else:
-                                df_upravene_ukoly = df_ukoly.drop(df_ukoly.index[idx])
+                            if "TaskID" in df_ukoly.columns: df_upravene_ukoly = df_ukoly[df_ukoly["TaskID"] != t_id]
+                            else: df_upravene_ukoly = df_ukoly.drop(df_ukoly.index[idx])
                             df_upravene_ukoly.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
                             st.rerun()
             else: st.caption("Žádné připomínky.")
         except: st.caption("Žádné připomínky.")
     else: st.caption("Žádné připomínky.")
+
 if __name__ == "__main__":
     TAJNE_HESLO = "Cestak123"
     if "prihlasen_trvale" not in st.session_state: st.session_state["prihlasen_trvale"] = False
