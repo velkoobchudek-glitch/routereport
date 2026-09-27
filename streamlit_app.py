@@ -72,7 +72,7 @@ def nacti_profil_uzivatele():
         try:
             df = pd.read_csv(UZIVATEL_SOUBOR, dtype=str)
             if not df.empty:
-                return {"jmeno": str(df.iloc["jmeno"]), "telefon": str(df.iloc["telefon"])}
+                return {"jmeno": str(df.iloc[0]["jmeno"]), "telefon": str(df.iloc[0]["telefon"])}
         except: pass
     return {"jmeno": "Jakub Holan", "telefon": "608470900"}
 
@@ -167,8 +167,8 @@ def obnov_data_ze_zalohy_backend(soubor_objekt):
         text_z = bytes_z.decode("utf-8", errors="ignore")
         if "===UKOLY_SEPARATOR===" in text_z:
             casti_textu = text_z.split("===UKOLY_SEPARATOR===\n")
-            text_historie = casti_textu
-            text_ukoly = casti_textu if len(casti_textu) > 1 else ""
+            text_historie = casti_textu[0]
+            text_ukoly = casti_textu[1] if len(casti_textu) > 1 else ""
             
             lines_h = [l for l in text_historie.splitlines() if l.strip() and "#ERROR!" not in l]
             if lines_h:
@@ -392,7 +392,7 @@ def vykresli_aplikaci():
                                 st.success("Zápis smazán!")
                                 st.rerun()
                         with col_poj2:
-                            if st.button("⚪ ZPĚT", key=f"del_row_hist_{puvodni_rok_no_{puvodni_radek_id}}", use_container_width=True):
+                            if st.button("⚪ ZPĚT", key=f"del_row_hist_{puvodni_radek_id}_back", use_container_width=True):
                                 st.session_state[pojistka_key] = False
                                 st.rerun()
             
@@ -472,7 +472,6 @@ def vykresli_aplikaci():
                         
                         st.write("")
                         
-                        # 🟢 OBRÁZEK NAROVNÁN: Tlačítko se promění přímo na ploše bez vyskakovacího okna
                         pojistka_u_key = f"confirm_task_wipe_{t_id}"
                         if pojistka_u_key not in st.session_state: st.session_state[pojistka_u_key] = False
                         
@@ -481,7 +480,6 @@ def vykresli_aplikaci():
                                 st.session_state[pojistka_u_key] = True
                                 st.rerun()
                         else:
-                            # Tlačítko se promění na dvě velká přehledná pod-tlačítka na stejném řádku
                             col_click1, col_click2 = st.columns(2)
                             with col_click1:
                                 if st.button("🟢 ANO, VYMAZAT Nazdar!", key=f"yes_del_task_{t_id}", use_container_width=True):
