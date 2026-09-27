@@ -280,15 +280,11 @@ def vykresli_aplikaci():
             df_zobrazeni = df_hist.copy()
             df_zobrazeni["skutecny_index"] = df_zobrazeni.index
             
-            # 🟢 KALENDÁŘNÍ ŘAZENÍ: Převedeme textové sloupce na opravdový časový formát Pythonu
             def parsuj_kalendarne(row_item):
-                try:
-                    return datetime.strptime(f"{row_item['Datum']} {row_item['Čas']}", "%d.%m.%Y %H:%M")
-                except:
-                    return datetime.min
+                try: return datetime.strptime(f"{row_item['Datum']} {row_item['Čas']}", "%d.%m.%Y %H:%M")
+                except: return datetime.min
             
             df_zobrazeni["Timestamp_Serazeni"] = df_zobrazeni.apply(parsuj_kalendarne, axis=1)
-            # Nejmladší (nejnovější reálný den/hodina) poletí nekompromisně nahoru
             df_sorted_calendar = df_zobrazeni.sort_values(by="Timestamp_Serazeni", ascending=False)
             
             if "RawText_Zaloha" in df_sorted_calendar.columns:
@@ -299,36 +295,81 @@ def vykresli_aplikaci():
                 with st.container(border=True):
                     st.markdown(f"📅 **{radek_historie['Datum']} {radek_historie['Čas']}** | 🏢 **{radek_historie['Klient']}**")
                     st.markdown(f"📝 **Poznámka:** {radek_historie['Poznámka']}")
-                    if st.button(f"🗑️ Smazat tento zápis", key=f"del_row_hist_{puvodni_radek_id}", use_container_width=True):
-                        df_upraveny_hist = df_hist.drop(df_hist.index[puvodni_radek_id])
-                        df_upraveny_hist.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
-                        st.success("Zápis smazán!")
-                        st.rerun()
+                    
+                    pojistka_key = f"confirm_del_state_{puvodni_radek_id}"
+                    if pojistka_key not in st.session_state:
+                        st.session_state[pojistka_key] = False
+                        
+                    if not st.session_state[pojistka_key]:
+                        if st.button(f"🗑️ Smazat tento zápis", key=f"del_btn_init_{puvodni_radek_id}", use_container_width=True):
+                            st.session_state[pojistka_key] = True
+                            st.rerun()
+                    else:
+                        st.warning("⚠️ Opravdu smazat? Tuto akci nelze vrátit zpět.")
+                        col_poj1, col_poj2 = st.columns(2)
+                        with col_poj1:
+                            if st.button("🟢 ANO, SMAZAT", key=f"del_btn_yes_{puvodni_radek_id}", use_container_width=True):
+                                df_upraveny_hist = df_hist.drop(df_hist.index[puvodni_radek_id])
+                                df_upraveny_hist.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
+                                st.session_state[pojistka_key] = False
+                                st.success("Zápis smazán!")
+                                st.rerun()
+                        with col_poj2:
+                            if st.button("⚪ ZPĚT", key=f"del_btn_no_{puvodni_radek_id}", use_container_width=True):
+                                st.session_state[pojistka_key] = False
+                                st.rerun()
             
             st.write("")
             kompletni_text_mailu = "\n".join(df_hist["RawText_Zaloha"].tolist()) if "RawText_Zaloha" in df_hist.columns else ""
             mail_odkaz = f"mailto:{st.session_state.get('boss_email', '')}?subject={urllib.parse.quote('RouteReport')}&body={urllib.parse.quote(kompletni_text_mailu)}"
             st.markdown(f'<a href="{mail_odkaz}" target="_blank"><button style="width:100%; height:52px; background-color:#1E88E5; color:white; border:none; border-radius:5px; font-weight:bold;">✉️ ODESLAT REPORT MANAŽEROVI</button></a>', unsafe_allow_html=True)
         except: pass
+    # Generování spojeného souboru zálohy pro deník i úkoly najednou
     if os.path.exists(HISTORIE_SOUBOR):
         try:
-            df_hist_download = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
-            csv_data_data = df_hist_download.to_csv(index=False, encoding="utf-8")
-            st.download_button(label="📥 STÁHNOUT ZÁLOHU DENÍKU (.CSV)", data=csv_data_data, file_name="routereport_zaloha.csv", mime="text/csv", use_container_width=True)
+            df_buffer_h = pd.read_csv(HISTORIE_SOUBOR, dtype=str)
+            df_buffer_u = pd.read_csv(UKOLY_SOUBOR, dtype=str) if os.path.exists(UKOLY_SOUBOR) else pd.DataFrame()
+            
+            # Zabalíme obě tabulky do jednoho textového řetězce s jasným oddělovačem na pozadí
+            string_io_vystup = io.StringIO()
+            df_buffer_h.to_csv(string_io_vystup, index=False, encoding="utf-8")
+            string_io_vystup.write("===UKOLY_SEPARATOR===\n")
+            if not df_buffer_u.empty:
+                df_buffer_u.to_csv(string_io_vystup, index=False, encoding="utf-8")
+                
+            csv_spojena_data = string_io_vystup.getvalue()
+            st.download_button(label="📥 STÁHNOUT ZÁLOHU DENÍKU I ÚKOLŮ (.CSV)", data=csv_spojena_data, file_name="routereport_zaloha.csv", mime="text/csv", use_container_width=True)
         except: pass
             
-    with st.expander("📤 Obnovit deník ze starší zálohy (.csv)"):
-        st.markdown("<small>💡 <i>Tip: Všechny soubory jsou nyní plně odemčené. Stačí prstem kliknout na jakýkoliv dříve schovaný soubor.</i></small>", unsafe_allow_html=True)
+    with st.expander("📤 Obnovit deník i úkoly ze spojené zálohy (.csv)"):
+        st.markdown("<small>💡 <i>Tip: Všechny soubory jsou plně odemčené. Stačí kliknout na stažený soubor routereport_zaloha.csv a aplikace obnoví návštěvy i vaše vnitřní úkoly najednou.</i></small>", unsafe_allow_html=True)
         soubor_zalohy = st.file_uploader("Vyberte stažený soubor zálohy:")
         if soubor_zalohy is not None:
             try:
                 bytes_z = soubor_zalohy.read()
                 text_z = bytes_z.decode("utf-8", errors="ignore")
-                df_import_zaloha = pd.read_csv(io.StringIO(text_z), dtype=str)
-                df_import_zaloha.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
-                st.success("✅ Záloha nahrána! Restartuji...")
+                
+                if "===UKOLY_SEPARATOR===" in text_z:
+                    casti_textu = text_z.split("===UKOLY_SEPARATOR===\n")
+                    text_historie = casti_textu[0]
+                    text_ukoly = casti_textu[1] if len(casti_textu) > 1 else ""
+                    
+                    df_imp_h = pd.read_csv(io.StringIO(text_historie), dtype=str)
+                    df_imp_h.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
+                    
+                    if text_ukoly.strip():
+                        df_imp_u = pd.read_csv(io.StringIO(text_ukoly), dtype=str)
+                        df_imp_u.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
+                    elif os.path.exists(UKOLY_SOUBOR):
+                        os.remove(UKOLY_SOUBOR)
+                else:
+                    # Pokud by šlo o starší typ zálohy, obnovíme jen historii schůzek
+                    df_import_starší = pd.read_csv(io.StringIO(text_z), dtype=str)
+                    df_import_starší.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
+                    
+                st.success("✅ Deník i úkoly byly bezpečně obnoveny! Restartuji...")
                 st.rerun()
-            except Exception as e: st.error(f"Chyba obnovy: {e}")
+            except Exception as e: st.error(f"Chyba obnovy zálohy: {e}")
 
     st.write("---")
     st.subheader("📅 Moje vnitřní připomínky a úkoly")
