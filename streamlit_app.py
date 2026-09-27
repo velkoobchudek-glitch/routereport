@@ -267,17 +267,19 @@ def vykresli_aplikaci():
     ch_b2b = st.checkbox(t["b2b_lbl"])
     ch_zajem = st.checkbox(t["no_interest"])
     st.caption(t["samples_lbl"])
+    
+    # 🟢 BYZNYSOVÝ UPGRADE: Značka CYKLON vymazána natvrdo z kódu. Nahrazena čistou kolonkou „Značka 4“
     c_z1, col_z2, col_z3, col_z4 = st.columns(4)
     with c_z1: m_bbb = st.checkbox("BBB")
-    with col_z2: m_cyclon = st.checkbox("CYCLON")
-    with col_z3: m_basil = st.checkbox("BASIL")
-    with col_z4: m_rozzo = st.checkbox("ROZZO")
+    with col_z2: m_basil = st.checkbox("BASIL")
+    with col_z3: m_rozzo = st.checkbox("ROZZO")
+    with col_z4: m_brand4 = st.checkbox("Značka 4") # Volná prázdná pozice do budoucna
     
     zapisane_slevy = {}
     if m_bbb: zapisane_slevy["BBB"] = st.text_input("Sleva BBB (%):", value="")
-    if m_cyclon: zapisane_slevy["CYCLON"] = st.text_input("Sleva CYCLON (%):", value="")
     if m_basil: zapisane_slevy["BASIL"] = st.text_input("Sleva BASIL (%):", value="")
     if m_rozzo: zapisane_slevy["ROZZO"] = st.text_input("Sleva ROZZO (%):", value="")
+    if m_brand4: zapisane_slevy["Značka 4"] = st.text_input("Sleva Značka 4 (%):", value="")
         
     txt_konkurence = st.text_input(t["competitor_lbl"], value="")
     txt_potencial = st.text_input(t["potential_lbl"], value="")
@@ -295,7 +297,7 @@ def vykresli_aplikaci():
             sit_seznam = []
             if ch_b2b: sit_seznam.append("Bude zaslán přístup na B2B")
             if ch_zajem: sit_seznam.append("Nemá zájem - bere od jiných")
-            zvolene_znacky = [z for z, c in [("BBB", m_bbb), ("CYCLON", m_cyclon), ("BASIL", m_basil), ("ROZZO", m_rozzo)] if c]
+            zvolene_znacky = [z for z, c in [("BBB", m_bbb), ("BASIL", m_basil), ("ROZZO", m_rozzo), ("Značka 4", m_brand4)] if c]
             if zvolene_znacky: sit_seznam.insert(0, f"Předvedeny vzorky ({', '.join(zvolene_znacky)})")
             slevy_vystup_list = [f"{znacka}: {hodnota} %" for znacka, hodnota in zapisane_slevy.items() if hodnota.strip()]
             slevy_objekt = {
@@ -376,6 +378,30 @@ def vykresli_aplikaci():
             if obnov_data_ze_zalohy_backend(soubor_zalohy_spodní):
                 st.success("✅ Obnoveno z dolní lišty! Restartuji...")
                 st.rerun()
+
+    st.write("")
+    if os.path.exists(HISTORIE_SOUBOR) or os.path.exists(UKOLY_SOUBOR):
+        if "confirm_wipe_out_all" not in st.session_state: st.session_state["confirm_wipe_out_all"] = False
+        if not st.session_state["confirm_wipe_out_all"]:
+            if st.button("🚨 VYMAZAT KOMPLETNĚ CELÝ DENÍK I ÚKOLY", use_container_width=True):
+                st.session_state["confirm_wipe_out_all"] = True
+                st.rerun()
+        else:
+            st.error("⚠️ OPRAVDU CHCETE VYMAZAT ÚPLNĚ VŠECHNY ZÁPISY I ÚKOLY NA JEDNO KLIKNUTÍ?")
+            c_w1, c_w2 = st.columns(2)
+            with c_w1:
+                if st.button("🟢 ANO, VYMAZAT VŠE", use_container_width=True, key="btn_wipe_yes"):
+                    if os.path.exists(HISTORIE_SOUBOR): os.remove(HISTORIE_SOUBOR)
+                    if os.path.exists(UKOLY_SOUBOR): os.remove(UKOLY_SOUBOR)
+                    if os.path.exists(EXPORT_FILE): os.remove(EXPORT_FILE)
+                    st.session_state["confirm_wipe_out_all"] = False
+                    st.success("Aplikace byla kompletně vyčištěna!")
+                    time.sleep(1)
+                    st.rerun()
+            with c_w2:
+                if st.button("⚪ ZPĚT", use_container_width=True, key="btn_wipe_no"):
+                    st.session_state["confirm_wipe_out_all"] = False
+                    st.rerun()
 
     st.write("---")
     st.subheader("📅 Moje vnitřní připomínky a úkoly")
