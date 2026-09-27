@@ -72,7 +72,7 @@ def nacti_profil_uzivatele():
         try:
             df = pd.read_csv(UZIVATEL_SOUBOR, dtype=str)
             if not df.empty:
-                return {"jmeno": str(df.iloc[0]["jmeno"]), "telefon": str(df.iloc[0]["telefon"])}
+                return {"jmeno": str(df.iloc["jmeno"]), "telefon": str(df.iloc["telefon"])}
         except: pass
     return {"jmeno": "", "telefon": ""}
 
@@ -121,10 +121,11 @@ def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy
                 c_tel = bunka.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
                 if c_tel.replace("+", "").isdigit() and len(c_tel.replace("+", "")) >= 9: cisty_tel = c_tel
 
-    # 🟢 ZÁHLAVÍ REPORTU: Jméno a telefon jsou schované zde a odesílají se automaticky šéfovi
+    termin_kontakt = ozvat_se.strftime('%d.%m.%Y') if ozvat_se else '---'
+
     blok_textu = (
         f"{oddelovac}\n"
-        f"👤 REPORTÉRE: {prof.get('jmeno', 'Nezadáno')} ({prof.get('telefon', '---')})\n"
+        f"👤 OBCHODNÍK:  {prof.get('jmeno', 'Nezadáno')} ({prof.get('telefon', '---')})\n"
         f"{t['out_date']}: {datum.strftime('%d.%m.%Y')} v {cas_text}\n"
         f"{t['out_dur']}:      {trvani} min \n"
         f"{t['out_client']}:      {klient_vystup}\n"
@@ -133,7 +134,7 @@ def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy
         f"{t['out_comp']}:  {slevy_data['konkurence']}\n"
         f"{t['out_pot']}:   {slevy_data['potencial']}\n"
         f"{t['out_note']}:    {poznamka if poznamka else '...'}\n"
-        f"{t['out_remind']}:    {ozvat_se.strftime('%d.%m('%d.%m.%Y') if ozvat_se else '---'}\n"
+        f"{t['out_remind']}:    {termin_kontakt}\n"
         f"{oddelovac}\n\n"
     )
     try:
@@ -166,11 +167,11 @@ def obnov_data_ze_zalohy_backend(soubor_objekt):
         text_z = bytes_z.decode("utf-8", errors="ignore")
         if "===UKOLY_SEPARATOR===" in text_z:
             casti_textu = text_z.split("===UKOLY_SEPARATOR===\n")
-            text_historie = casti_textu[0]
+            text_historie = casti_textu
             df_imp_h = pd.read_csv(io.StringIO(text_historie), dtype=str)
             df_imp_h.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
-            if len(casti_textu) > 1 and casti_textu[1].strip():
-                text_ukoly = casti_textu[1]
+            if len(casti_textu) > 1 and casti_textu.strip():
+                text_ukoly = casti_textu
                 df_imp_u = pd.read_csv(io.StringIO(text_ukoly), dtype=str)
                 df_imp_u.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
             elif os.path.exists(UKOLY_SOUBOR): os.remove(UKOLY_SOUBOR)
@@ -213,7 +214,6 @@ def vykresli_aplikaci():
     if "brand_name_3" not in st.session_state: st.session_state["brand_name_3"] = "ROZZO"
     if "brand_name_4" not in st.session_state: st.session_state["brand_name_4"] = ""
 
-    # 🟢 1. OBRÁZEK: Šedý box na ploše je kompletně vymazán!
     if df_klienti is not None and not st.session_state["zmena_databaze"]:
         st.success(t["db_loaded_ok"])
         if st.button(t["db_change_btn"], use_container_width=True):
@@ -316,7 +316,6 @@ def vykresli_aplikaci():
     st.subheader(t["sec_4"])
     col_t1, col_t2 = st.columns(2)
     with col_t1:
-        # 🟢 2. OBRÁZEK: Vyřazeny pětiminutové zbytečnosti, skáče to čistě po desítkách: 10, 20, 30, 40... s výchozí 10!
         desitkove_intervaly = ["10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "110", "120"]
         txt_trvani = st.selectbox(t["duration_lbl"], desitkove_intervaly, index=0)
         ch_ozvat = st.checkbox(t["remind_check"])
@@ -467,7 +466,6 @@ def vykresli_aplikaci():
                             else: st.markdown('<a href="mailto:" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">✉️ OTEVŘÍT E-MAIL</button></a>', unsafe_allow_html=True)
                         
                         st.write("")
-                        # 🟢 3. OBRÁZEK: Přidána neprůstřelná dvoukroková zelená pojistka pro vyřízení úkolu!
                         pojistka_u_key = f"confirm_task_wipe_{t_id}"
                         if pojistka_u_key not in st.session_state: st.session_state[pojistka_u_key] = False
                         
@@ -486,8 +484,7 @@ def vykresli_aplikaci():
                                     st.session_state[pojistka_u_key] = False
                                     st.rerun()
                             with col_tsk2:
-                                if st.button("⚪ ZPĚT", key=f"no_del_task_{t_id}", use_container_width=True):
-                                    st.session_state[pojistka_key] = False
+                                if st.button("⚪ ZPÊT", key=f"no_del_task_{t_id}", use_container_width=True):
                                     st.session_state[pojistka_u_key] = False
                                     st.rerun()
             else: st.caption("Žádné připomínky.")
