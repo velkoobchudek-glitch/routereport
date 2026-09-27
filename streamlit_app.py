@@ -23,7 +23,7 @@ UZIVATEL_SOUBOR = "crm_profil_uzivatele.csv"
 LANG = {
     "CS": {
         "title": "📱 RouteReport - Poznámky z terénu",
-        "cfg_sec": "⚙️ Globální nastavení systému a profilu",
+        "cfg_sec": "⚙️ Globální nastavení systému (Značky / Profil / Adresy)",
         "cfg_info": "Zadejte konfiguraci značek, e-mail manažera, jméno reportéra a nahrajte adresář.",
         "upload_lbl": "KROK 3: Vyberte soubor s klienty z Pohody (CSV):",
         "email_boss_lbl": "E-mailová adresa manažera / šéfa:",
@@ -49,7 +49,7 @@ LANG = {
         "note_lbl": "Napište průběh jednání nebo výsledek návštěvy:",
         "remind_check": "🔔 Naplánovat termín příštího kontaktu (Vnitřní připomínka)",
         "remind_date": "Kdy se ozvat znovu:",
-        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVĚ",
+        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVÊ",
         "save_success": "✅ Info o návštěvě úspěšně uloženo!",
         "copy_title": "📋 Text ke zkopírování:",
         "out_date": "📅 DATUM A ČAS",
@@ -74,7 +74,7 @@ def nacti_profil_uzivatele():
             if not df.empty:
                 return {"jmeno": str(df.iloc[0]["jmeno"]), "telefon": str(df.iloc[0]["telefon"])}
         except: pass
-    return {"jmeno": "", "telefon": ""}
+    return {"jmeno": "Jakub Holan", "telefon": "608470900"}
 
 def uloz_profil_uzivatele(jmeno, telephone):
     try:
@@ -125,7 +125,7 @@ def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy
 
     blok_textu = (
         f"{oddelovac}\n"
-        f"👤 OBCHODNÍK:  {prof.get('jmeno', 'Nezadáno')} ({prof.get('telefon', '---')})\n"
+        f"👤 OBCHODNÍK:  {prof.get('jmeno', 'Jakub Holan')} ({prof.get('telefon', '608470900')})\n"
         f"{t['out_date']}: {datum.strftime('%d.%m.%Y')} v {cas_text}\n"
         f"{t['out_dur']}:      {trvani} min \n"
         f"{t['out_client']}:      {klient_vystup}\n"
@@ -165,29 +165,24 @@ def obnov_data_ze_zalohy_backend(soubor_objekt):
     try:
         bytes_z = soubor_objekt.read()
         text_z = bytes_z.decode("utf-8", errors="ignore")
-        
-        # 🟢 UPGRADE PROTI #ERROR!: Kód čistí text od excelových chyb a parsuje tabulky naprosto neprůstřelně
         if "===UKOLY_SEPARATOR===" in text_z:
             casti_textu = text_z.split("===UKOLY_SEPARATOR===\n")
             text_historie = casti_textu[0]
             text_ukoly = casti_textu[1] if len(casti_textu) > 1 else ""
             
-            # Vyčištění a import historie
             lines_h = [l for l in text_historie.splitlines() if l.strip() and "#ERROR!" not in l]
             if lines_h:
                 df_imp_h = pd.read_csv(io.StringIO("\n".join(lines_h)), dtype=str)
                 df_imp_h = df_imp_h[df_imp_h['Datum'].str.contains(r'\d', na=False, regex=True)]
                 df_imp_h.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
             
-            # Vyčištění a import úkolů
             if text_ukoly.strip():
                 lines_u = [l for l in text_ukoly.splitlines() if l.strip() and "#ERROR!" not in l]
                 if lines_u:
                     df_imp_u = pd.read_csv(io.StringIO("\n".join(lines_u)), dtype=str)
                     df_imp_u = df_imp_u[df_imp_u['Termín'].str.contains(r'\d', na=False, regex=True)]
                     df_imp_u.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
-            elif os.path.exists(UKOLY_SOUBOR):
-                os.remove(UKOLY_SOUBOR)
+            elif os.path.exists(UKOLY_SOUBOR): os.remove(UKOLY_SOUBOR)
         else:
             lines_fallback = [l for l in text_z.splitlines() if l.strip() and "#ERROR!" not in l]
             df_import_starší = pd.read_csv(io.StringIO("\n".join(lines_fallback)), dtype=str)
@@ -229,13 +224,7 @@ def vykresli_aplikaci():
     if "brand_name_3" not in st.session_state: st.session_state["brand_name_3"] = "ROZZO"
     if "brand_name_4" not in st.session_state: st.session_state["brand_name_4"] = ""
 
-    with st.container(border=True):
-        st.markdown("### 👤 Profil obchodního zástupce")
-        col_p1, col_p2 = st.columns(2)
-        with col_p1: u_jmeno = st.text_input("Moje Jméno a Příjmení:", value=prof.get("jmeno", "Jakub Holan"))
-        with col_p2: u_tel = st.text_input("Můj Firemní Telefon:", value=prof.get("telefon", "608470900"))
-        if u_jmeno != prof.get("jmeno") or u_tel != prof.get("telefon"): uloz_profil_uzivatele(u_jmeno.strip(), u_tel.strip())
-
+    # 🟢 1. OBRÁZEK: Profil obchodníka odsud nadobro zmizel! Už se ukáže čistě jen uvnitř expanderu nastavení
     if df_klienti is not None and not st.session_state["zmena_databaze"]:
         st.success(t["db_loaded_ok"])
         if st.button(t["db_change_btn"], use_container_width=True):
@@ -243,8 +232,14 @@ def vykresli_aplikaci():
             st.rerun()
     else:
         with st.expander(t["cfg_sec"], expanded=True):
-            st.markdown("### ⚙️ 1. Pojmenování produktových řad / značek")
-            st.caption("💡 Nechte políčko prázdné, pokud značku nechcete v aplikaci vůbec ukazovat.")
+            st.markdown("### 👤 1. Profil obchodního zástupce (Skryté nastavení)")
+            col_p1, col_p2 = st.columns(2)
+            with col_p1: u_jmeno = st.text_input("Moje Jméno a Příjmení:", value=prof.get("jmeno", "Jakub Holan"))
+            with col_p2: u_tel = st.text_input("Můj Firemní Telefon:", value=prof.get("telefon", "608470900"))
+            if u_jmeno != prof.get("jmeno") or u_tel != prof.get("telefon"):
+                uloz_profil_uzivatele(u_jmeno.strip(), u_tel.strip())
+
+            st.markdown("### ⚙️ 2. Pojmenování produktových řad / značek")
             col_b1, col_b2 = st.columns(2)
             with col_b1:
                 b1 = st.text_input("Název Značky 1:", value=st.session_state["brand_name_1"])
@@ -257,11 +252,11 @@ def vykresli_aplikaci():
             st.session_state["brand_name_3"] = b3.strip()
             st.session_state["brand_name_4"] = b4.strip()
 
-            st.markdown("### ✉️ 2. Nastavení reportů")
+            st.markdown("### ✉️ 3. Nastavení reportů")
             email_sefa = st.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", "manager@firma.cz"))
             if email_sefa: st.session_state["boss_email"] = email_sefa
             
-            st.markdown("### 🏢 3. Aktivace databáze")
+            st.markdown("### 🏢 4. Aktivace databáze")
             nahrany_soubor = st.file_uploader(t["upload_lbl"])
             if nahrany_soubor is not None:
                 df_klienti = zpracuj_a_ulož_soubor(nahrany_soubor)
@@ -481,27 +476,15 @@ def vykresli_aplikaci():
                             else: st.markdown('<a href="mailto:" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">✉️ OTEVŘÍT E-MAIL</button></a>', unsafe_allow_html=True)
                         
                         st.write("")
-                        pojistka_u_key = f"confirm_task_wipe_{t_id}"
-                        if pojistka_u_key not in st.session_state: st.session_state[pojistka_u_key] = False
-                        
-                        if not st.session_state[pojistka_u_key]:
-                            if st.button("✅ Vyřízeno", key=f"init_del_task_{t_id}", use_container_width=True):
-                                st.session_state[pojistka_u_key] = True
-                                st.rerun()
-                        else:
-                            st.warning("🟢 Opravdu přesunout tento úkol do vyřízených?")
-                            col_tsk1, col_tsk2 = st.columns(2)
-                            with col_tsk1:
-                                if st.button("🟢 ANO, POTVRDIT", key=f"yes_del_task_{t_id}", use_container_width=True):
-                                    if "TaskID" in df_ukoly.columns: df_upravene_ukoly = df_ukoly[df_ukoly["TaskID"] != t_id]
-                                    else: df_upravene_ukoly = df_ukoly.drop(df_ukoly.index[idx])
-                                    df_upravene_ukoly.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
-                                    st.session_state[pojistka_u_key] = False
-                                    st.rerun()
-                            with col_tsk2:
-                                if st.button("⚪ ZPĚT", key=f"no_del_task_{t_id}", use_container_width=True):
-                                    st.session_state[pojistka_u_key] = False
-                                    st.rerun()
+                        # 🟢 2. OBRÁZEK OPRAVEN: Kompletně zrušena otravná pojistka! Jedno jediné kliknutí úkol natvrdo smaže z disku!
+                        if st.button("✅ Vyřízeno", key=f"instant_clear_task_{t_id}", use_container_width=True):
+                            if "TaskID" in df_ukoly.columns:
+                                df_upravene_ukoly = df_ukoly[df_ukoly["TaskID"] != t_id]
+                            else:
+                                df_upravene_ukoly = df_ukoly.drop(df_ukoly.index[idx])
+                            df_upravene_ukoly.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
+                            st.success("Úkol úspěšně vyřízen a smazán!")
+                            st.rerun()
             else: st.caption("Žádné připomínky.")
         except: st.caption("Žádné připomínky.")
     else: st.caption("Žádné připomínky.")
