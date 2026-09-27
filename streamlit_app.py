@@ -19,10 +19,11 @@ EXPORT_FILE = "routereport_zapisy_schuzek.txt"
 ULOZENY_ADRESAR_FILE = "cached_customer_db.csv"
 HISTORIE_SOUBOR = "crm_historie_schuzek.csv"
 UKOLY_SOUBOR = "crm_ukoly_kalendar.csv"
+UZIVATEL_SOUBOR = "crm_profil_uzivatele.csv"
 LANG = {
     "CS": {
         "title": "📱 RouteReport - Poznámky z terénu",
-        "cfg_sec": "⚙️ Inicializace systému a licencí",
+        "cfg_sec": "⚙️ Globální nastavení systému a licencí",
         "cfg_info": "Zadejte konfiguraci značek, e-mail manažera a nahrajte adresář.",
         "upload_lbl": "KROK 2: Vyberte soubor s klienty z Pohody (CSV):",
         "email_boss_lbl": "E-mailová adresa manažera / šéfa:",
@@ -66,6 +67,20 @@ def odstran_diakritiku(text):
     if not isinstance(text, str):
         text = str(text)
     return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
+def nacti_profil_uzivatele():
+    if os.path.exists(UZIVATEL_SOUBOR):
+        try:
+            df = pd.read_csv(UZIVATEL_SOUBOR, dtype=str)
+            if not df.empty:
+                return {"jmeno": str(df.iloc[0]["jmeno"]), "telefon": str(df.iloc[0]["telefon"])}
+        except: pass
+    return {"jmeno": "", "telefon": ""}
+
+def uloz_profil_uzivatele(jmeno, telephone):
+    try:
+        df = pd.DataFrame([{"jmeno": jmeno, "telefon": telephone}])
+        df.to_csv(UZIVATEL_SOUBOR, index=False, encoding="utf-8")
+    except: pass
 def zpracuj_a_ulož_soubor(uploaded_file):
     if uploaded_file is None:
         return None
@@ -95,21 +110,20 @@ def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy
     oddelovac = "=" * 45
     t = LANG[jazyk]
     ciste_jmeno = str(klient_vystup).replace(" | ", " ").strip()
+    prof = nacti_profil_uzivatele()
     
     cisty_tel, cisty_mail = "", ""
     if surovy_radek_klienta is not None:
         for bunka in [str(x).strip() for x in surovy_radek_klienta]:
-            if "@" in bunka:
-                cisty_mail = bunka
-            elif bunka.startswith("http") or bunka.startswith("www."):
-                pass
+            if "@" in bunka: cisty_mail = bunka
+            elif bunka.startswith("http") or bunka.startswith("www."): pass
             else:
                 c_tel = bunka.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-                if c_tel.replace("+", "").isdigit() and len(c_tel.replace("+", "")) >= 9:
-                    cisty_tel = c_tel
+                if c_tel.replace("+", "").isdigit() and len(c_tel.replace("+", "")) >= 9: cisty_tel = c_tel
 
     blok_textu = (
         f"{oddelovac}\n"
+        f"👤 OBCHODNÍK:  {prof.get('jmeno', 'Nezadáno')} ({prof.get('telefon', '---')})\n"
         f"{t['out_date']}: {datum.strftime('%d.%m.%Y')} v {cas_text}\n"
         f"{t['out_dur']}:      {trvani} min \n"
         f"{t['out_client']}:      {klient_vystup}\n"
@@ -135,11 +149,8 @@ def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy
         if ozvat_se:
             unikatni_id_ukolu = f"ID_{int(time.time() * 1000)}"
             novy_ukol = {
-                "TaskID": unikatni_id_ukolu,
-                "Termín": ozvat_se.strftime('%d.%m.%Y'), 
-                "Klient": ciste_jmeno[:120], 
-                "Telefon": cisty_tel if cisty_tel else "Nezadáno", 
-                "Email": cisty_mail if cisty_mail else "Nezadáno", 
+                "TaskID": unikatni_id_ukolu, "Termín": ozvat_se.strftime('%d.%m.%Y'), "Klient": ciste_jmeno[:120], 
+                "Telefon": cisty_tel if cisty_tel else "Nezadáno", "Email": cisty_mail if cisty_mail else "Nezadáno", 
                 "Důvod (Kvůli čemu)": f"Slevy: {slevy_data['sleva']}. {poznamka}"
             }
             df_ukol = pd.DataFrame([novy_ukol])
@@ -147,29 +158,26 @@ def zapis_zaznam_na_disk(klient_vystup, datum, cas_text, trvani, ozvat_se, slevy
             else: df_ukol.to_csv(UKOLY_SOUBOR, mode='w', header=True, index=False, encoding="utf-8")
         return blok_textu
     except: return ""
+
 def obnov_data_ze_zalohy_backend(soubor_objekt):
     try:
         bytes_z = soubor_objekt.read()
         text_z = bytes_z.decode("utf-8", errors="ignore")
         if "===UKOLY_SEPARATOR===" in text_z:
             casti_textu = text_z.split("===UKOLY_SEPARATOR===\n")
-            text_historie = casti_textu
-            text_ukoly = casti_textu if len(casti_textu) > 1 else ""
-            
+            text_historie = casti_textu[0]
             df_imp_h = pd.read_csv(io.StringIO(text_historie), dtype=str)
             df_imp_h.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
-            
-            if text_ukoly.strip():
+            if len(casti_textu) > 1 and casti_textu[1].strip():
+                text_ukoly = casti_textu[1]
                 df_imp_u = pd.read_csv(io.StringIO(text_ukoly), dtype=str)
                 df_imp_u.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
-            elif os.path.exists(UKOLY_SOUBOR):
-                os.remove(UKOLY_SOUBOR)
+            elif os.path.exists(UKOLY_SOUBOR): os.remove(UKOLY_SOUBOR)
         else:
             df_import_starší = pd.read_csv(io.StringIO(text_z), dtype=str)
             df_import_starší.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
         return True
-    except:
-        return False
+    except: return False
 def vykresli_aplikaci():
     jazyk = "CS"
     t = LANG[jazyk]
@@ -194,6 +202,7 @@ def vykresli_aplikaci():
 
     if "zmena_databaze" not in st.session_state: st.session_state["zmena_databaze"] = False
     df_klienti = nacti_trvale_ulozeny_adresar()
+    prof = nacti_profil_uzivatele()
     
     email_sefa = st.sidebar.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", "manager@firma.cz"))
     if email_sefa: st.session_state["boss_email"] = email_sefa
@@ -203,6 +212,13 @@ def vykresli_aplikaci():
     if "brand_name_3" not in st.session_state: st.session_state["brand_name_3"] = "ROZZO"
     if "brand_name_4" not in st.session_state: st.session_state["brand_name_4"] = ""
 
+    with st.container(border=True):
+        st.markdown("### 👤 Profil obchodního zástupce")
+        col_p1, col_p2 = st.columns(2)
+        with col_p1: u_jmeno = st.text_input("Moje Jméno a Příjmení:", value=prof.get("jmeno", ""))
+        with col_p2: u_tel = st.text_input("Můj Firemní Telefon:", value=prof.get("telefon", ""))
+        if u_jmeno != prof.get("jmeno") or u_tel != prof.get("telefon"): uloz_profil_uzivatele(u_jmeno.strip(), u_tel.strip())
+
     if df_klienti is not None and not st.session_state["zmena_databaze"]:
         st.success(t["db_loaded_ok"])
         if st.button(t["db_change_btn"], use_container_width=True):
@@ -211,6 +227,7 @@ def vykresli_aplikaci():
     else:
         with st.expander(t["cfg_sec"], expanded=True):
             st.markdown("### ⚙️ 1. Pojmenování produktových řad / značek")
+            st.caption("💡 Nechte políčko prázdné, pokud značku nechcete v aplikaci vůbec ukazovat.")
             col_b1, col_b2 = st.columns(2)
             with col_b1:
                 b1 = st.text_input("Název Značky 1:", value=st.session_state["brand_name_1"])
@@ -227,7 +244,6 @@ def vykresli_aplikaci():
             email_sefa = st.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", "manager@firma.cz"))
             if email_sefa: st.session_state["boss_email"] = email_sefa
             
-            # 🟢 DOKONALÉ ZJEDNODUŠENÍ: Zde uživatele už nemůžeme splést. Nahrává pouze Adresy a startuje web!
             st.markdown("### 🏢 3. Aktivace databáze")
             nahrany_soubor = st.file_uploader(t["upload_lbl"])
             if nahrany_soubor is not None:
@@ -262,7 +278,7 @@ def vykresli_aplikaci():
 
     vybrany_box_text = st.selectbox(t["search_hint"], options=seznam_zakazniku, index=None, placeholder=t["select_prompt"])
     st.caption("✍️ Nebo napište jméno ZCELA NOVÉHO klienta ručně (pokud chybí v adresáři):")
-    novy_klient_manualni = st.text_input("Zadejte jméno, telefon nebo město nového kontaktu:", value="", placeholder="Např. Jan Nečas | +420777123456").strip()
+    novy_klient_manualni = st.text_input("Zadejte jméno, telefon nebo město nového kontaktu:", value="").strip()
 
     finalni_klient_vystup = ""
     surovy_radek_pro_zápis = None
@@ -281,27 +297,25 @@ def vykresli_aplikaci():
     
     aktivni_znacky_seznam = []
     for klicek in ["brand_name_1", "brand_name_2", "brand_name_3", "brand_name_4"]:
-        if st.session_state[klicek]:
-            aktivni_znacky_seznam.append(st.session_state[klicek])
+        if st.session_state[klicek]: aktivni_znacky_seznam.append(st.session_state[klicek])
             
     zvolene_v_checkboxech = {}
     if aktivni_znacky_seznam:
         mobilni_sloupciky = st.columns(len(aktivni_znacky_seznam))
         for i, jmeno_znacky in enumerate(aktivni_znacky_seznam):
-            with mobilni_sloupciky[i]:
-                zvolene_v_checkboxech[jmeno_znacky] = st.checkbox(jmeno_znacky, key=f"chk_dyn_{jmeno_znacky}")
+            with mobilni_sloupciky[i]: zvolene_v_checkboxech[jmeno_znacky] = st.checkbox(jmeno_znacky, key=f"chk_dyn_{jmeno_znacky}")
                 
     zapisane_slevy = {}
     for jmeno_znacky, zaskrtnuto in zvolene_v_checkboxech.items():
-        if zaskrtnuto:
-            zapisane_slevy[jmeno_znacky] = st.text_input(f"Sleva {jmeno_znacky} (%):", value="", key=f"input_dyn_sl_{jmeno_znacky}")
+        if zaskrtnuto: zapisane_slevy[jmeno_znacky] = st.text_input(f"Sleva {jmeno_znacky} (%):", value="", key=f"input_dyn_sl_{jmeno_znacky}")
         
     txt_konkurence = st.text_input(t["competitor_lbl"], value="")
     txt_potencial = st.text_input(t["potential_lbl"], value="")
     st.subheader(t["sec_4"])
     col_t1, col_t2 = st.columns(2)
     with col_t1:
-        txt_trvani = st.selectbox(t["duration_lbl"], [str(i) for i in range(5, 125, 5)], index=5)
+        # 🟢 OPRAVA MINUT: Doba trvání schůzky je zafixována na výchozích 10 minut přesně podle fotky z terénu!
+        txt_trvani = st.selectbox(t["duration_lbl"], [str(i) for i in range(5, 125, 5)], index=[str(i) for i in range(5, 125, 5)].index("10"))
         ch_ozvat = st.checkbox(t["remind_check"])
         dt_ozvat = st.date_input(t["remind_date"], (datetime.utcnow() + timedelta(hours=2)).date()) if ch_ozvat else None
     with col_t2: txt_poznamka = st.text_area(t["note_lbl"], height=115)
@@ -312,7 +326,6 @@ def vykresli_aplikaci():
             sit_seznam = []
             if ch_b2b: sit_seznam.append("Bude zaslán přístup na B2B")
             if ch_zajem: sit_seznam.append("Nemá zájem - bere od jiných")
-            
             vybrane_v_akci = [z for z, c in zvolene_v_checkboxech.items() if c]
             if vybrane_v_akci: sit_seznam.insert(0, f"Předvedeny vzorky ({', '.join(vybrane_v_akci)})")
             
@@ -351,7 +364,7 @@ def vykresli_aplikaci():
                     st.markdown(f"📝 **Poznámka:** {radek_historie['Poznámka']}")
                     
                     pojistka_key = f"confirm_del_state_{puvodni_radek_id}"
-                    if puvodi_key not in st.session_state: st.session_state[pojistka_key] = False
+                    if pojistka_key not in st.session_state: st.session_state[pojistka_key] = False
                         
                     if not st.session_state[pojistka_key]:
                         if st.button(f"🗑️ Smazat tento zápis", key=f"del_row_hist_init_{puvodni_radek_id}", use_container_width=True):
@@ -389,7 +402,6 @@ def vykresli_aplikaci():
             st.download_button(label="📥 STÁHNOUT ZÁLOHU DENÍKU I ÚKOLŮ (.CSV)", data=csv_spojena_data, file_name="routereport_zaloha.csv", mime="text/csv", use_container_width=True)
         except: pass
             
-    # 🟢 DOKONALÉ PLÁNOVÁNÍ: Nahrávací okno zálohy se objeví čistě až zde, uvnitř funkční aplikace pod deníkem!
     with st.expander("📤 Obnovit starší deník i úkoly ze záložního souboru (.csv)"):
         st.markdown("<small>💡 <i>Tip: Pokud přecházíte na nový počítač, zde můžete jedním kliknutím nahrát zpět celou svou historii schůzek i vnitřní připomínky.</i></small>", unsafe_allow_html=True)
         soubor_zalohy_spodní = st.file_uploader("Vyberte stažený soubor routereport_zaloha.csv:", key="bottom_backup_uploader_clean")
@@ -403,7 +415,7 @@ def vykresli_aplikaci():
     if os.path.exists(HISTORIE_SOUBOR):
         if "confirm_wipe_out_all" not in st.session_state: st.session_state["confirm_wipe_out_all"] = False
         if not st.session_state["confirm_wipe_out_all"]:
-            if st.button("🚨 VYMAZAT KOMPLETNĚ CELÝ DENÍK NÁVŠTÊV", use_container_width=True):
+            if st.button("🚨 VYMAZAT KOMPLETNĚ CELÝ DENÍK NÁVŠTĚV", use_container_width=True):
                 st.session_state["confirm_wipe_out_all"] = True
                 st.rerun()
         else:
@@ -445,12 +457,10 @@ def vykresli_aplikaci():
                         
                         col_c1, col_c2 = st.columns(2)
                         with col_c1:
-                            if tel_val and tel_val != "Nezadáno" and tel_val != "":
-                                st.markdown(f'<a href="tel:{tel_val}" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#2E7D32; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">📞 ZAVOLAT: {tel_val}</button></a>', unsafe_allow_html=True)
+                            if tel_val and tel_val != "Nezadáno" and tel_val != "": st.markdown(f'<a href="tel:{tel_val}" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#2E7D32; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">📞 ZAVOLAT: {tel_val}</button></a>', unsafe_allow_html=True)
                             else: st.markdown('<a href="tel:" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">📞 OTEVŘÍT TELEFON</button></a>', unsafe_allow_html=True)
                         with col_c2:
-                            if mail_val and mail_val != "Nezadáno" and mail_val != "":
-                                st.markdown(f'<a href="mailto:{mail_val}" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#1565C0; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">✉️ NAPÍSAT E-MAIL</button></a>', unsafe_allow_html=True)
+                            if mail_val and mail_val != "Nezadáno" and mail_val != "": st.markdown(f'<a href="mailto:{mail_val}" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#1565C0; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">✉️ NAPÍSAT E-MAIL</button></a>', unsafe_allow_html=True)
                             else: st.markdown('<a href="mailto:" style="text-decoration:none;"><button style="width:100%; height:42px; background-color:#555555; color:white; border:none; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">✉️ OTEVŘÍT E-MAIL</button></a>', unsafe_allow_html=True)
                         
                         st.write("")
