@@ -22,9 +22,9 @@ UKOLY_SOUBOR = "crm_ukoly_kalendar.csv"
 LANG = {
     "CS": {
         "title": "📱 RouteReport - Poznámky z terénu",
-        "cfg_sec": "⚙️ Globální nastavení systému a licencí",
+        "cfg_sec": "⚙️ Inicializace systému a licencí",
         "cfg_info": "Zadejte konfiguraci značek, e-mail manažera a nahrajte adresář.",
-        "upload_lbl": "Vyberte soubor s klienty (CSV):",
+        "upload_lbl": "KROK 2: Vyberte soubor s klienty z Pohody (CSV):",
         "email_boss_lbl": "E-mailová adresa manažera / šéfa:",
         "db_loaded_ok": "✅ Systém je plně nakonfigurován a připraven k práci.",
         "db_change_btn": "⚙️ OTEVŘÍT GLOBÁLNÍ NASTAVENÍ SYSTÉMU (ZNAČKY / EMAILY / ADRESY)",
@@ -211,7 +211,6 @@ def vykresli_aplikaci():
     else:
         with st.expander(t["cfg_sec"], expanded=True):
             st.markdown("### ⚙️ 1. Pojmenování produktových řad / značek")
-            st.caption("💡 Nechte políčko prázdné, pokud značku nechcete v aplikaci vůbec ukazovat.")
             col_b1, col_b2 = st.columns(2)
             with col_b1:
                 b1 = st.text_input("Název Značky 1:", value=st.session_state["brand_name_1"])
@@ -228,22 +227,13 @@ def vykresli_aplikaci():
             email_sefa = st.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", "manager@firma.cz"))
             if email_sefa: st.session_state["boss_email"] = email_sefa
             
-            st.markdown("### 🏢 3. Nahrání a obnova dat")
-            st.markdown("🌐 **MOŽNOST A: Nahrát nový adresář firem z počítače (Adresy.csv)**")
+            # 🟢 DOKONALÉ ZJEDNODUŠENÍ: Zde uživatele už nemůžeme splést. Nahrává pouze Adresy a startuje web!
+            st.markdown("### 🏢 3. Aktivace databáze")
             nahrany_soubor = st.file_uploader(t["upload_lbl"])
             if nahrany_soubor is not None:
                 df_klienti = zpracuj_a_ulož_soubor(nahrany_soubor)
                 if df_klienti is not None:
                     st.session_state["zmena_databaze"] = False
-                    st.rerun()
-                    
-            st.markdown("---")
-            st.markdown("📥 **MOŽNOST B: Rychlá obnova celé vaší předchozí zálohy deníku i úkolů**")
-            nahrana_ranni_zaloha = st.file_uploader("Vyberte stažený soubor routereport_zaloha.csv:")
-            if nahrana_ranni_zaloha is not None:
-                if obnov_data_ze_zalohy_backend(nahrana_ranni_zaloha):
-                    st.success("✅ Záloha kompletně obnovena! Načítám data...")
-                    time.sleep(1)
                     st.rerun()
     if df_klienti is None: return
     st.subheader(t["sec_1"])
@@ -361,7 +351,7 @@ def vykresli_aplikaci():
                     st.markdown(f"📝 **Poznámka:** {radek_historie['Poznámka']}")
                     
                     pojistka_key = f"confirm_del_state_{puvodni_radek_id}"
-                    if pojistka_key not in st.session_state: st.session_state[pojistka_key] = False
+                    if puvodi_key not in st.session_state: st.session_state[pojistka_key] = False
                         
                     if not st.session_state[pojistka_key]:
                         if st.button(f"🗑️ Smazat tento zápis", key=f"del_row_hist_init_{puvodni_radek_id}", use_container_width=True):
@@ -399,19 +389,21 @@ def vykresli_aplikaci():
             st.download_button(label="📥 STÁHNOUT ZÁLOHU DENÍKU I ÚKOLŮ (.CSV)", data=csv_spojena_data, file_name="routereport_zaloha.csv", mime="text/csv", use_container_width=True)
         except: pass
             
-    with st.expander("📤 Obnovit deník i úkoly ze spojené zálohy (.csv)"):
-        soubor_zalohy_spodní = st.file_uploader("Vyberte stažený soubor zálohy:", key="bottom_backup_uploader")
+    # 🟢 DOKONALÉ PLÁNOVÁNÍ: Nahrávací okno zálohy se objeví čistě až zde, uvnitř funkční aplikace pod deníkem!
+    with st.expander("📤 Obnovit starší deník i úkoly ze záložního souboru (.csv)"):
+        st.markdown("<small>💡 <i>Tip: Pokud přecházíte na nový počítač, zde můžete jedním kliknutím nahrát zpět celou svou historii schůzek i vnitřní připomínky.</i></small>", unsafe_allow_html=True)
+        soubor_zalohy_spodní = st.file_uploader("Vyberte stažený soubor routereport_zaloha.csv:", key="bottom_backup_uploader_clean")
         if soubor_zalohy_spodní is not None:
             if obnov_data_ze_zalohy_backend(soubor_zalohy_spodní):
-                st.success("✅ Obnoveno z dolní lišty! Restartuji...")
+                st.success("✅ Záloha úspěšně nahrána do programu!")
+                time.sleep(0.5)
                 st.rerun()
 
-    # 🟢 🚨 NEPRŮSTŘELNÉ ČIŠTĚNÍ V8: Vymaže pouze deník schůzek, vaše připomínky a barevná tlačítka na volání drží dál!
     st.write("")
     if os.path.exists(HISTORIE_SOUBOR):
         if "confirm_wipe_out_all" not in st.session_state: st.session_state["confirm_wipe_out_all"] = False
         if not st.session_state["confirm_wipe_out_all"]:
-            if st.button("🚨 VYMAZAT KOMPLETNĚ CELÝ DENÍK NÁVŠTĚV", use_container_width=True):
+            if st.button("🚨 VYMAZAT KOMPLETNĚ CELÝ DENÍK NÁVŠTÊV", use_container_width=True):
                 st.session_state["confirm_wipe_out_all"] = True
                 st.rerun()
         else:
