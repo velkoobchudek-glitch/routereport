@@ -33,7 +33,7 @@ LANG = {
         "time_lbl": "Čas návštěvy (Hodina / Minuta):",
         "duration_lbl": "Trvání návštěvy:",
         "sec_2": "2. Vyhledat a vybrat klienta",
-        "search_hint": "Ťukněte and začněte psát jméno nebo město...",
+        "search_hint": "Ťukněte a začněte psát jméno nebo město...",
         "select_prompt": "-- Začněte psát jméno nebo město klienta --",
         "selected_ok": "🤝 Vybráno pro uložení:",
         "no_client": "❌ Žádný klient neodpovídá zadání.",
@@ -66,7 +66,6 @@ def odstran_diakritiku(text):
     if not isinstance(text, str):
         text = str(text)
     return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
-@st.cache_data
 def zpracuj_a_ulož_soubor(uploaded_file):
     if uploaded_file is None:
         return None
@@ -154,8 +153,8 @@ def obnov_data_ze_zalohy_backend(soubor_objekt):
         text_z = bytes_z.decode("utf-8", errors="ignore")
         if "===UKOLY_SEPARATOR===" in text_z:
             casti_textu = text_z.split("===UKOLY_SEPARATOR===\n")
-            text_historie = casti_textu[0]
-            text_ukoly = casti_textu[1] if len(casti_textu) > 1 else ""
+            text_historie = casti_textu
+            text_ukoly = casti_textu if len(casti_textu) > 1 else ""
             
             df_imp_h = pd.read_csv(io.StringIO(text_historie), dtype=str)
             df_imp_h.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
@@ -209,9 +208,8 @@ def vykresli_aplikaci():
             email_sefa = st.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", ""))
             if email_sefa: st.session_state["boss_email"] = email_sefa
             
-            # 🟢 DEFINITIVNÍ OPRAVA: Odstraněna veškerá typová omezení. Android už soubory nezablokuje!
             st.markdown("🌐 **MOŽNOST A: Nahrát nový adresář firem z počítače (Adresy.csv)**")
-            nahrany_soubor = st.file_uploader(t["upload_lbl"], key="main_db_uploader")
+            nahrany_soubor = st.file_uploader(t["upload_lbl"])
             if nahrany_soubor is not None:
                 df_klienti = zpracuj_a_ulož_soubor(nahrany_soubor)
                 if df_klienti is not None:
@@ -220,7 +218,7 @@ def vykresli_aplikaci():
                     
             st.markdown("---")
             st.markdown("📥 **MOŽNOST B: Rychlá obnova celé vaší předchozí zálohy deníku i úkolů**")
-            nahrana_ranni_zaloha = st.file_uploader("Vyberte stažený soubor routereport_zaloha.csv:", key="main_backup_uploader")
+            nahrana_ranni_zaloha = st.file_uploader("Vyberte stažený soubor routereport_zaloha.csv:")
             if nahrana_ranni_zaloha is not None:
                 if obnov_data_ze_zalohy_backend(nahrana_ranni_zaloha):
                     st.success("✅ Záloha kompletně obnovena! Načítám data...")
@@ -276,10 +274,10 @@ def vykresli_aplikaci():
     with col_z4: m_rozzo = st.checkbox("ROZZO")
     
     zapisane_slevy = {}
-    if m_bbb: zapisane_slevy["BBB"] = st.text_input("Sleva BBB (%):", value="", key="sl_bbb")
-    if m_cyclon: zapisane_slevy["CYCLON"] = st.text_input("Sleva CYCLON (%):", value="", key="sl_cyc")
-    if m_basil: zapisane_slevy["BASIL"] = st.text_input("Sleva BASIL (%):", value="", key="sl_bas")
-    if m_rozzo: zapisane_slevy["ROZZO"] = st.text_input("Sleva ROZZO (%):", value="", key="sl_roz")
+    if m_bbb: zapisane_slevy["BBB"] = st.text_input("Sleva BBB (%):", value="")
+    if m_cyclon: zapisane_slevy["CYCLON"] = st.text_input("Sleva CYCLON (%):", value="")
+    if m_basil: zapisane_slevy["BASIL"] = st.text_input("Sleva BASIL (%):", value="")
+    if m_rozzo: zapisane_slevy["ROZZO"] = st.text_input("Sleva ROZZO (%):", value="")
         
     txt_konkurence = st.text_input(t["competitor_lbl"], value="")
     txt_potencial = st.text_input(t["potential_lbl"], value="")
@@ -373,7 +371,6 @@ def vykresli_aplikaci():
         except: pass
             
     with st.expander("📤 Obnovit deník i úkoly ze spojené zálohy (.csv)"):
-        # 🟢 ODEMČENO: Odstraněna formátová omezení i pro spodní lištu záloh
         soubor_zalohy_spodní = st.file_uploader("Vyberte stažený soubor zálohy:", key="bottom_backup_uploader")
         if soubor_zalohy_spodní is not None:
             if obnov_data_ze_zalohy_backend(soubor_zalohy_spodní):
