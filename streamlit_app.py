@@ -37,7 +37,7 @@ LANG = {
         "search_hint": "Ťukněte a začněte psát jméno nebo město...",
         "select_prompt": "-- Začněte psát jméno nebo město klienta --",
         "selected_ok": "🤝 Vybráno pro uložení:",
-        "no_client": "❌ Ž難ný klient neodpovídá zadání.",
+        "no_client": "❌ Žádný klient neodpovídá zadání.",
         "sec_3": "3. Situace z terénu a slevy",
         "b2b_lbl": "Bude zaslán přístup na B2B",
         "no_interest": "Nemá zájem - bere od jiných",
@@ -72,7 +72,7 @@ def nacti_profil_uzivatele():
         try:
             df = pd.read_csv(UZIVATEL_SOUBOR, dtype=str)
             if not df.empty:
-                return {"jmeno": str(df.iloc[0]["jmeno"]), "telefon": str(df.iloc[0]["telefon"])}
+                return {"jmeno": str(df.iloc["jmeno"]), "telefon": str(df.iloc["telefon"])}
         except: pass
     return {"jmeno": "Jakub Holan", "telefon": "608470900"}
 
@@ -167,8 +167,8 @@ def obnov_data_ze_zalohy_backend(soubor_objekt):
         text_z = bytes_z.decode("utf-8", errors="ignore")
         if "===UKOLY_SEPARATOR===" in text_z:
             casti_textu = text_z.split("===UKOLY_SEPARATOR===\n")
-            text_historie = casti_textu[0]
-            text_ukoly = casti_textu[1] if len(casti_textu) > 1 else ""
+            text_historie = casti_textu
+            text_ukoly = casti_textu if len(casti_textu) > 1 else ""
             
             lines_h = [l for l in text_historie.splitlines() if l.strip() and "#ERROR!" not in l]
             if lines_h:
@@ -392,7 +392,7 @@ def vykresli_aplikaci():
                                 st.success("Zápis smazán!")
                                 st.rerun()
                         with col_poj2:
-                            if st.button("⚪ ZPĚT", key=f"del_row_hist_{puvodni_radek_id}_no", use_container_width=True):
+                            if st.button("⚪ ZPĚT", key=f"del_row_hist_{puvodni_rok_no_{puvodni_radek_id}}", use_container_width=True):
                                 st.session_state[pojistka_key] = False
                                 st.rerun()
             
@@ -472,17 +472,30 @@ def vykresli_aplikaci():
                         
                         st.write("")
                         
-                        # 🟢 NEPRŮSTŘELNÝ FIX PROTI ZASEKÁVÁNÍ: Kód okamžitě vymaže řádek a natvrdo propláchne cache prohlížeče!
-                        if st.button("🗑️ Vyřídit úkol", key=f"instant_wipe_btn_id_{t_id}", use_container_width=True):
-                            if "TaskID" in df_ukoly.columns:
-                                df_upravene_ukoly = df_ukoly[df_ukoly["TaskID"] != t_id]
-                            else:
-                                df_upravene_ukoly = df_ukoly.drop(df_ukoly.index[idx])
-                            df_upravene_ukoly.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
-                            
-                            # Bleskové vyčištění stavu mezipaměti a okamžitý tvrdý reload stránky
-                            st.session_state.pop(f"instant_wipe_btn_id_{t_id}", None)
-                            st.rerun()
+                        # 🟢 OBRÁZEK NAROVNÁN: Tlačítko se promění přímo na ploše bez vyskakovacího okna
+                        pojistka_u_key = f"confirm_task_wipe_{t_id}"
+                        if pojistka_u_key not in st.session_state: st.session_state[pojistka_u_key] = False
+                        
+                        if not st.session_state[pojistka_u_key]:
+                            if st.button("🗑️ Vyřídit úkol", key=f"init_del_task_{t_id}", use_container_width=True):
+                                st.session_state[pojistka_u_key] = True
+                                st.rerun()
+                        else:
+                            # Tlačítko se promění na dvě velká přehledná pod-tlačítka na stejném řádku
+                            col_click1, col_click2 = st.columns(2)
+                            with col_click1:
+                                if st.button("🟢 ANO, VYMAZAT Nazdar!", key=f"yes_del_task_{t_id}", use_container_width=True):
+                                    if "TaskID" in df_ukoly.columns:
+                                        df_upravene_ukoly = df_ukoly[df_ukoly["TaskID"] != t_id]
+                                    else:
+                                        df_upravene_ukoly = df_ukoly.drop(df_ukoly.index[idx])
+                                    df_upravene_ukoly.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
+                                    st.session_state[pojistka_u_key] = False
+                                    st.rerun()
+                            with col_click2:
+                                if st.button("⚪ ZPĚT", key=f"no_del_task_{t_id}", use_container_width=True):
+                                    st.session_state[pojistka_u_key] = False
+                                    st.rerun()
             else: st.caption("Žádné připomínky.")
         except: st.caption("Žádné připomínky.")
     else: st.caption("Žádné připomínky.")
