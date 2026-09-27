@@ -22,12 +22,12 @@ UKOLY_SOUBOR = "crm_ukoly_kalendar.csv"
 LANG = {
     "CS": {
         "title": "📱 RouteReport - Poznámky z terénu",
-        "cfg_sec": "⚙️ Nastavení adresáře zákazníků (CSV)",
-        "cfg_info": "Nahrajte soubor CSV se zákazníky a zadejte e-mail šéfa.",
-        "upload_lbl": "Vyberte soubor s klienty:",
+        "cfg_sec": "⚙️ Globální nastavení systému a licencí",
+        "cfg_info": "Zadejte konfiguraci značek, e-mail manažera a nahrajte adresář.",
+        "upload_lbl": "Vyberte soubor s klienty (CSV):",
         "email_boss_lbl": "E-mailová adresa manažera / šéfa:",
-        "db_loaded_ok": "✅ Adresář zákazníků i e-mail jsou bezpečně uloženy.",
-        "db_change_btn": "🔄 Aktualizovat adresář klientů / Změnit e-mail šéfa",
+        "db_loaded_ok": "✅ Systém je plně nakonfigurován a připraven k práci.",
+        "db_change_btn": "⚙️ OTEVŘÍT GLOBÁLNÍ NASTAVENÍ SYSTÉMU (ZNAČKY / EMAILY / ADRESY)",
         "sec_1": "1. Datum, čas a trvání návštěvy",
         "date_lbl": "Datum:",
         "time_lbl": "Čas návštěvy (Hodina / Minuta):",
@@ -195,19 +195,40 @@ def vykresli_aplikaci():
     if "zmena_databaze" not in st.session_state: st.session_state["zmena_databaze"] = False
     df_klienti = nacti_trvale_ulozeny_adresar()
     
-    email_sefa = st.sidebar.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", ""))
+    email_sefa = st.sidebar.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", "manager@firma.cz"))
     if email_sefa: st.session_state["boss_email"] = email_sefa
+
+    if "brand_name_1" not in st.session_state: st.session_state["brand_name_1"] = "BBB"
+    if "brand_name_2" not in st.session_state: st.session_state["brand_name_2"] = "BASIL"
+    if "brand_name_3" not in st.session_state: st.session_state["brand_name_3"] = "ROZZO"
+    if "brand_name_4" not in st.session_state: st.session_state["brand_name_4"] = ""
 
     if df_klienti is not None and not st.session_state["zmena_databaze"]:
         st.success(t["db_loaded_ok"])
-        if st.button(t["db_change_btn"]):
+        if st.button(t["db_change_btn"], use_container_width=True):
             st.session_state["zmena_databaze"] = True
             st.rerun()
     else:
         with st.expander(t["cfg_sec"], expanded=True):
-            email_sefa = st.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", ""))
+            st.markdown("### ⚙️ 1. Pojmenování produktových řad / značek")
+            st.caption("💡 Nechte políčko prázdné, pokud značku nechcete v aplikaci vůbec ukazovat.")
+            col_b1, col_b2 = st.columns(2)
+            with col_b1:
+                b1 = st.text_input("Název Značky 1:", value=st.session_state["brand_name_1"])
+                b2 = st.text_input("Název Značky 2:", value=st.session_state["brand_name_2"])
+            with col_b2:
+                b3 = st.text_input("Název Značky 3:", value=st.session_state["brand_name_3"])
+                b4 = st.text_input("Název Značky 4:", value=st.session_state["brand_name_4"])
+            st.session_state["brand_name_1"] = b1.strip()
+            st.session_state["brand_name_2"] = b2.strip()
+            st.session_state["brand_name_3"] = b3.strip()
+            st.session_state["brand_name_4"] = b4.strip()
+
+            st.markdown("### ✉️ 2. Nastavení reportů")
+            email_sefa = st.text_input(t["email_boss_lbl"], value=st.session_state.get("boss_email", "manager@firma.cz"))
             if email_sefa: st.session_state["boss_email"] = email_sefa
             
+            st.markdown("### 🏢 3. Nahrání a obnova dat")
             st.markdown("🌐 **MOŽNOST A: Nahrát nový adresář firem z počítače (Adresy.csv)**")
             nahrany_soubor = st.file_uploader(t["upload_lbl"])
             if nahrany_soubor is not None:
@@ -268,18 +289,22 @@ def vykresli_aplikaci():
     ch_zajem = st.checkbox(t["no_interest"])
     st.caption(t["samples_lbl"])
     
-    # 🟢 BYZNYSOVÝ UPGRADE: Značka CYKLON vymazána natvrdo z kódu. Nahrazena čistou kolonkou „Značka 4“
-    c_z1, col_z2, col_z3, col_z4 = st.columns(4)
-    with c_z1: m_bbb = st.checkbox("BBB")
-    with col_z2: m_basil = st.checkbox("BASIL")
-    with col_z3: m_rozzo = st.checkbox("ROZZO")
-    with col_z4: m_brand4 = st.checkbox("Značka 4") # Volná prázdná pozice do budoucna
-    
+    aktivni_znacky_seznam = []
+    for klicek in ["brand_name_1", "brand_name_2", "brand_name_3", "brand_name_4"]:
+        if st.session_state[klicek]:
+            aktivni_znacky_seznam.append(st.session_state[klicek])
+            
+    zvolene_v_checkboxech = {}
+    if aktivni_znacky_seznam:
+        mobilni_sloupciky = st.columns(len(aktivni_znacky_seznam))
+        for i, jmeno_znacky in enumerate(aktivni_znacky_seznam):
+            with mobilni_sloupciky[i]:
+                zvolene_v_checkboxech[jmeno_znacky] = st.checkbox(jmeno_znacky, key=f"chk_dyn_{jmeno_znacky}")
+                
     zapisane_slevy = {}
-    if m_bbb: zapisane_slevy["BBB"] = st.text_input("Sleva BBB (%):", value="")
-    if m_basil: zapisane_slevy["BASIL"] = st.text_input("Sleva BASIL (%):", value="")
-    if m_rozzo: zapisane_slevy["ROZZO"] = st.text_input("Sleva ROZZO (%):", value="")
-    if m_brand4: zapisane_slevy["Značka 4"] = st.text_input("Sleva Značka 4 (%):", value="")
+    for jmeno_znacky, zaskrtnuto in zvolene_v_checkboxech.items():
+        if zaskrtnuto:
+            zapisane_slevy[jmeno_znacky] = st.text_input(f"Sleva {jmeno_znacky} (%):", value="", key=f"input_dyn_sl_{jmeno_znacky}")
         
     txt_konkurence = st.text_input(t["competitor_lbl"], value="")
     txt_potencial = st.text_input(t["potential_lbl"], value="")
@@ -297,8 +322,10 @@ def vykresli_aplikaci():
             sit_seznam = []
             if ch_b2b: sit_seznam.append("Bude zaslán přístup na B2B")
             if ch_zajem: sit_seznam.append("Nemá zájem - bere od jiných")
-            zvolene_znacky = [z for z, c in [("BBB", m_bbb), ("BASIL", m_basil), ("ROZZO", m_rozzo), ("Značka 4", m_brand4)] if c]
-            if zvolene_znacky: sit_seznam.insert(0, f"Předvedeny vzorky ({', '.join(zvolene_znacky)})")
+            
+            vybrane_v_akci = [z for z, c in zvolene_v_checkboxech.items() if c]
+            if vybrane_v_akci: sit_seznam.insert(0, f"Předvedeny vzorky ({', '.join(vybrane_v_akci)})")
+            
             slevy_vystup_list = [f"{znacka}: {hodnota} %" for znacka, hodnota in zapisane_slevy.items() if hodnota.strip()]
             slevy_objekt = {
                 "situace": ", ".join(sit_seznam) if sit_seznam else "Žádná specifická situace",
@@ -379,23 +406,23 @@ def vykresli_aplikaci():
                 st.success("✅ Obnoveno z dolní lišty! Restartuji...")
                 st.rerun()
 
+    # 🟢 🚨 NEPRŮSTŘELNÉ ČIŠTĚNÍ V8: Vymaže pouze deník schůzek, vaše připomínky a barevná tlačítka na volání drží dál!
     st.write("")
-    if os.path.exists(HISTORIE_SOUBOR) or os.path.exists(UKOLY_SOUBOR):
+    if os.path.exists(HISTORIE_SOUBOR):
         if "confirm_wipe_out_all" not in st.session_state: st.session_state["confirm_wipe_out_all"] = False
         if not st.session_state["confirm_wipe_out_all"]:
-            if st.button("🚨 VYMAZAT KOMPLETNĚ CELÝ DENÍK I ÚKOLY", use_container_width=True):
+            if st.button("🚨 VYMAZAT KOMPLETNĚ CELÝ DENÍK NÁVŠTĚV", use_container_width=True):
                 st.session_state["confirm_wipe_out_all"] = True
                 st.rerun()
         else:
-            st.error("⚠️ OPRAVDU CHCETE VYMAZAT ÚPLNĚ VŠECHNY ZÁPISY I ÚKOLY NA JEDNO KLIKNUTÍ?")
+            st.error("⚠️ OPRAVDU CHCETE VYMAZAT HISTORII VŠECH ZÁPISŮ? (VAŠE VNITŘNÍ PŘIPOMÍNKY DO BUDOUCNA ZŮSTANOU BEZPEČNĚ NATVRDO ZACHOVÁNY)")
             c_w1, c_w2 = st.columns(2)
             with c_w1:
-                if st.button("🟢 ANO, VYMAZAT VŠE", use_container_width=True, key="btn_wipe_yes"):
+                if st.button("🟢 ANO, VYMAZAT DENÍK", use_container_width=True, key="btn_wipe_yes"):
                     if os.path.exists(HISTORIE_SOUBOR): os.remove(HISTORIE_SOUBOR)
-                    if os.path.exists(UKOLY_SOUBOR): os.remove(UKOLY_SOUBOR)
                     if os.path.exists(EXPORT_FILE): os.remove(EXPORT_FILE)
                     st.session_state["confirm_wipe_out_all"] = False
-                    st.success("Aplikace byla kompletně vyčištěna!")
+                    st.success("Deník návštěv vyčištěn! Připomínky drží dál. 👍")
                     time.sleep(1)
                     st.rerun()
             with c_w2:
