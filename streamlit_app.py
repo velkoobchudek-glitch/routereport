@@ -49,7 +49,7 @@ LANG = {
         "note_lbl": "Napište průběh jednání nebo výsledek návštěvy:",
         "remind_check": "🔔 Naplánovat termín příštího kontaktu (Vnitřní připomínka)",
         "remind_date": "Kdy se ozvat znovu:",
-        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVĚ",
+        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVÊ",
         "save_success": "✅ Info o návštěvě úspěšně uloženo!",
         "copy_title": "📋 Text ke zkopírování:",
         "out_date": "📅 DATUM A ČAS",
@@ -72,7 +72,7 @@ def nacti_profil_uzivatele():
         try:
             df = pd.read_csv(UZIVATEL_SOUBOR, dtype=str)
             if not df.empty:
-                return {"jmeno": str(df.iloc[0]["jmeno"]), "telefon": str(df.iloc[0]["telefon"])}
+                return {"jmeno": str(df.iloc["jmeno"]), "telefon": str(df.iloc["telefon"])}
         except: pass
     return {"jmeno": "Jakub Holan", "telefon": "608470900"}
 
@@ -167,8 +167,8 @@ def obnov_data_ze_zalohy_backend(soubor_objekt):
         text_z = bytes_z.decode("utf-8", errors="ignore")
         if "===UKOLY_SEPARATOR===" in text_z:
             casti_textu = text_z.split("===UKOLY_SEPARATOR===\n")
-            text_historie = casti_textu[0]
-            text_ukoly = casti_textu[1] if len(casti_textu) > 1 else ""
+            text_historie = casti_textu
+            text_ukoly = casti_textu if len(casti_textu) > 1 else ""
             
             lines_h = [l for l in text_historie.splitlines() if l.strip() and "#ERROR!" not in l]
             if lines_h:
@@ -289,7 +289,7 @@ def vykresli_aplikaci():
 
     vybrany_box_text = st.selectbox(t["search_hint"], options=seznam_zakazniku, index=None, placeholder=t["select_prompt"])
     st.caption("✍️ Nebo napište jméno ZCELA NOVÉHO klienta ručně (pokud chybí v adresáři):")
-    novy_klient_manualni = st.text_input("Zadejte jméno, telefon nebo město nového kontaktu:", value="").strip()
+    novy_klient_manualni = st.text_input("Zadejte jméno, telephone nebo město nového kontaktu:", value="").strip()
 
     finalni_klient_vystup = ""
     surovy_radek_pro_zápis = None
@@ -382,14 +382,14 @@ def vykresli_aplikaci():
                             st.session_state[pojistka_key] = True
                             st.rerun()
                     else:
-                        st.warning("⚠️ Opravdu smazat? Tuto akci nelze vrátit zpět.")
+                        # 🟢 PŘEHLEDNÁ KOLONKA POD TLAČÍTKEM: Čistý text a jasný druhý klik!
+                        st.markdown("<div style='background-color:#ffebee; padding:10px; border-radius:5px; border-left:5px solid #ef5350; margin-bottom:10px;'><b>⚠️ Opravdu smazat zprávu?</b></div>", unsafe_allow_html=True)
                         col_poj1, col_poj2 = st.columns(2)
                         with col_poj1:
-                            if st.button("🟢 ANO, SMAZAT", key=f"del_row_hist_{puvodni_radek_id}_yes", use_container_width=True):
+                            if st.button("🟢 ANO, VYMAZAT", key=f"del_row_hist_{puvodni_radek_id}_yes", use_container_width=True):
                                 df_upraveny_hist = df_hist.drop(df_hist.index[puvodni_radek_id])
                                 df_upraveny_hist.to_csv(HISTORIE_SOUBOR, index=False, encoding="utf-8")
                                 st.session_state[pojistka_key] = False
-                                st.success("Zápis smazán!")
                                 st.rerun()
                         with col_poj2:
                             if st.button("⚪ ZPĚT", key=f"del_row_hist_{puvodni_radek_id}_back", use_container_width=True):
@@ -472,6 +472,7 @@ def vykresli_aplikaci():
                         
                         st.write("")
                         
+                        # 🟢 PŘESNÉ AKČNÍ ŘEŠENÍ: První klik rozbalí varovnou kolonku, druhý klik smaže!
                         pojistka_u_key = f"confirm_task_wipe_{t_id}"
                         if pojistka_u_key not in st.session_state: st.session_state[pojistka_u_key] = False
                         
@@ -480,6 +481,8 @@ def vykresli_aplikaci():
                                 st.session_state[pojistka_u_key] = True
                                 st.rerun()
                         else:
+                            # Krásný barevný varovný pruh, který jasně říká, co se děje
+                            st.markdown("<div style='background-color:#ffebee; padding:10px; border-radius:5px; border-left:5px solid #ef5350; margin-bottom:10px;'><b>⚠️ Opravdu chcete vyřídit?</b></div>", unsafe_allow_html=True)
                             col_click1, col_click2 = st.columns(2)
                             with col_click1:
                                 if st.button("🟢 ANO, VYMAZAT Nazdar!", key=f"yes_del_task_{t_id}", use_container_width=True):
