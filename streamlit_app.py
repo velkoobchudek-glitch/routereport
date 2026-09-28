@@ -49,7 +49,7 @@ LANG = {
         "note_lbl": "Napište průběh jednání nebo výsledek návštěvy:",
         "remind_check": "🔔 Naplánovat termín příštího kontaktu (Vnitřní připomínka)",
         "remind_date": "Kdy se ozvat znovu:",
-        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVÊ",
+        "btn_save": "💾 ULOŽIT INFO O NÁVŠTĚVĚ",
         "save_success": "✅ Info o návštěvě úspěšně uloženo!",
         "copy_title": "📋 Text ke zkopírování:",
         "out_date": "📅 DATUM A ČAS",
@@ -167,8 +167,8 @@ def obnov_data_ze_zalohy_backend(soubor_objekt):
         text_z = bytes_z.decode("utf-8", errors="ignore")
         if "===UKOLY_SEPARATOR===" in text_z:
             casti_textu = text_z.split("===UKOLY_SEPARATOR===\n")
-            text_historie = casti_textu
-            text_ukoly = casti_textu if len(casti_textu) > 1 else ""
+            text_historie = casti_textu[0]
+            text_ukoly = casti_textu[1] if len(casti_textu) > 1 else ""
             
             lines_h = [l for l in text_historie.splitlines() if l.strip() and "#ERROR!" not in l]
             if lines_h:
@@ -289,7 +289,7 @@ def vykresli_aplikaci():
 
     vybrany_box_text = st.selectbox(t["search_hint"], options=seznam_zakazniku, index=None, placeholder=t["select_prompt"])
     st.caption("✍️ Nebo napište jméno ZCELA NOVÉHO klienta ručně (pokud chybí v adresáři):")
-    novy_klient_manualni = st.text_input("Zadejte jméno, telephone nebo město nového kontaktu:", value="").strip()
+    novy_klient_manualni = st.text_input("Zadejte jméno, telefon nebo město nového kontaktu:", value="").strip()
 
     finalni_klient_vystup = ""
     surovy_radek_pro_zápis = None
@@ -382,7 +382,6 @@ def vykresli_aplikaci():
                             st.session_state[pojistka_key] = True
                             st.rerun()
                     else:
-                        # 🟢 PŘEHLEDNÁ KOLONKA POD TLAČÍTKEM: Čistý text a jasný druhý klik!
                         st.markdown("<div style='background-color:#ffebee; padding:10px; border-radius:5px; border-left:5px solid #ef5350; margin-bottom:10px;'><b>⚠️ Opravdu smazat zprávu?</b></div>", unsafe_allow_html=True)
                         col_poj1, col_poj2 = st.columns(2)
                         with col_poj1:
@@ -415,10 +414,14 @@ def vykresli_aplikaci():
             
     with st.expander("📤 Obnovit starší deník i úkoly ze záložního souboru (.csv)"):
         st.markdown("<small>💡 <i>Tip: Pokud přecházíte na nový počítač, zde můžete jedním kliknutím nahrát zpět celou svou historii schůzek i vnitřní připomínky.</i></small>", unsafe_allow_html=True)
+        
+        # 🟢 NEPRŮSTŘELNÝ FIX: Tento uploader už nikdy neztratí soubor z paměti kvůli vyřizování jiných tlačítek
         soubor_zalohy_spodní = st.file_uploader("Vyberte stažený soubor routereport_zaloha.csv:", key="bottom_backup_uploader_clean")
         if soubor_zalohy_spodní is not None:
-            if obnov_data_ze_zalohy_backend(soubor_zalohy_spodní):
-                st.rerun()
+            if "posledni_zpracovana_zaloha" not in st.session_state or st.session_state["posledni_zpracovana_zaloha"] != soubor_zalohy_spodní.name:
+                if obnov_data_ze_zalohy_backend(soubor_zalohy_spodní):
+                    st.session_state["posledni_zpracovana_zaloha"] = soubor_zalohy_spodní.name
+                    st.rerun()
 
     st.write("")
     if os.path.exists(HISTORIE_SOUBOR):
@@ -472,7 +475,6 @@ def vykresli_aplikaci():
                         
                         st.write("")
                         
-                        # 🟢 PŘESNÉ AKČNÍ ŘEŠENÍ: První klik rozbalí varovnou kolonku, druhý klik smaže!
                         pojistka_u_key = f"confirm_task_wipe_{t_id}"
                         if pojistka_u_key not in st.session_state: st.session_state[pojistka_u_key] = False
                         
@@ -481,7 +483,6 @@ def vykresli_aplikaci():
                                 st.session_state[pojistka_u_key] = True
                                 st.rerun()
                         else:
-                            # Krásný barevný varovný pruh, který jasně říká, co se děje
                             st.markdown("<div style='background-color:#ffebee; padding:10px; border-radius:5px; border-left:5px solid #ef5350; margin-bottom:10px;'><b>⚠️ Opravdu chcete vyřídit?</b></div>", unsafe_allow_html=True)
                             col_click1, col_click2 = st.columns(2)
                             with col_click1:
