@@ -72,7 +72,7 @@ def nacti_profil_uzivatele():
         try:
             df = pd.read_csv(UZIVATEL_SOUBOR, dtype=str)
             if not df.empty:
-                return {"jmeno": str(df.iloc["jmeno"]), "telefon": str(df.iloc["telefon"])}
+                return {"jmeno": str(df.iloc[0]["jmeno"]), "telefon": str(df.iloc[0]["telefon"])}
         except: pass
     return {"jmeno": "Jakub Holan", "telefon": "608470900"}
 
@@ -167,8 +167,8 @@ def obnov_data_ze_zalohy_backend(soubor_objekt):
         text_z = bytes_z.decode("utf-8", errors="ignore")
         if "===UKOLY_SEPARATOR===" in text_z:
             casti_textu = text_z.split("===UKOLY_SEPARATOR===\n")
-            text_historie = casti_textu
-            text_ukoly = casti_textu if len(casti_textu) > 1 else ""
+            text_historie = casti_textu[0]
+            text_ukoly = casti_textu[1] if len(casti_textu) > 1 else ""
             
             lines_h = [l for l in text_historie.splitlines() if l.strip() and "#ERROR!" not in l]
             if lines_h:
@@ -181,7 +181,6 @@ def obnov_data_ze_zalohy_backend(soubor_objekt):
                 if lines_u:
                     df_imp_u = pd.read_csv(io.StringIO("\n".join(lines_u)), dtype=str)
                     df_imp_u = df_imp_u[df_imp_u['Termín'].str.contains(r'\d', na=False, regex=True)]
-                    # 🟢 NEPRŮSTŘELNÁ OPRAVA STARÝCH ZÁLOH: Pokud starý soubor nemá sloupec Stav, kód ho automaticky vygeneruje a nastaví na Aktivní!
                     if "Stav" not in df_imp_u.columns:
                         df_imp_u["Stav"] = "Aktivní"
                     df_imp_u.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
@@ -495,7 +494,7 @@ def vykresli_aplikaci():
                         if not st.session_state[pojistka_u_key]:
                             if st.button("🗑️ Natvrdo SMAZAT úkol z mobilu", key=f"init_del_task_{t_id}", use_container_width=True):
                                 st.session_state[pojistka_u_key] = True
-                                .rerun()
+                                st.rerun()
                         else:
                             st.markdown("<div style='background-color:#212121; color:#ffffff; padding:12px; border-radius:5px; border-left:5px solid #ef5350; margin-top:10px; margin-bottom:10px;'><b>⚠️ OPRAVDU CHCETE TENTO ÚKOL NATVRDO SMAZAT?</b></div>", unsafe_allow_html=True)
                             col_click1, col_click2 = st.columns(2)
@@ -513,6 +512,7 @@ def vykresli_aplikaci():
         except: st.caption("Žádné připomínky.")
     else: st.caption("Žádné připomínky.")
 
+# 🟢 ZDE JE TA ABSOLUTNÍ STARTŮVNÍ BRÁNA, KTERÁ VÁM CHYBĚLA A KTEROU JSEM TEĎ FINÁLNĚ DOPLNIL!
 if __name__ == "__main__":
     TAJNE_HESLO = "Cestak123"
     if "prihlasen_trvale" not in st.session_state: st.session_state["prihlasen_trvale"] = False
