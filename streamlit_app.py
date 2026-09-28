@@ -181,7 +181,9 @@ def obnov_data_ze_zalohy_backend(soubor_objekt):
                 if lines_u:
                     df_imp_u = pd.read_csv(io.StringIO("\n".join(lines_u)), dtype=str)
                     df_imp_u = df_imp_u[df_imp_u['Termín'].str.contains(r'\d', na=False, regex=True)]
-                    if "Stav" not in df_imp_u.columns: df_imp_u["Stav"] = "Aktivní"
+                    # 🟢 NEPRŮSTŘELNÁ OPRAVA STARÝCH ZÁLOH: Pokud starý soubor nemá sloupec Stav, kód ho automaticky vygeneruje a nastaví na Aktivní!
+                    if "Stav" not in df_imp_u.columns:
+                        df_imp_u["Stav"] = "Aktivní"
                     df_imp_u.to_csv(UKOLY_SOUBOR, index=False, encoding="utf-8")
             elif os.path.exists(UKOLY_SOUBOR): os.remove(UKOLY_SOUBOR)
         else:
@@ -272,8 +274,8 @@ def vykresli_aplikaci():
     
     with col_d1: datum_sch = st.date_input(t["date_lbl"], cas_ted_plus_10.date())
     with col_t_h:
-        hodiny_list = [f"{i:02d}" for i in range(24)]
-        zvolena_hodina = st.selectbox("Hodina:", hodiny_list, index=akt_h)
+        hodily_list = [f"{i:02d}" for i in range(24)]
+        zvolena_hodina = st.selectbox("Hodina:", hodily_list, index=akt_h)
     with col_t_m:
         minuty_list = ["00", "10", "20", "30", "40", "50"]
         zaok_desitky = int(10 * (akt_m // 10))
@@ -383,7 +385,7 @@ def vykresli_aplikaci():
                             st.session_state[pojistka_key] = True
                             st.rerun()
                     else:
-                        st.markdown("<div style='background-color:#212121; color:#fff; padding:10px; border-radius:5px; border-left:5px solid #f44336; margin-bottom:10px;'><b>⚠️ Opravdu smazat zprávu z deníku?</b></div>", unsafe_allow_html=True)
+                        st.markdown("<div style='background-color:#212121; color:#fff; padding:10px; border-radius:5px; border-left:5px solid #ef5350; margin-bottom:10px;'><b>⚠️ Opravdu smazat zprávu z deníku?</b></div>", unsafe_allow_html=True)
                         col_poj1, col_poj2 = st.columns(2)
                         with col_poj1:
                             if st.button("🟢 ANO, SMAZAT", key=f"del_row_hist_{puvodni_radek_id}_yes", use_container_width=True):
@@ -426,7 +428,7 @@ def vykresli_aplikaci():
     if os.path.exists(HISTORIE_SOUBOR):
         if "confirm_wipe_out_all" not in st.session_state: st.session_state["confirm_wipe_out_all"] = False
         if not st.session_state["confirm_wipe_out_all"]:
-            if st.button("🚨 VYMAZAT KOMPLETNĚ CELÝ DENÍK NÁVŠTÊV", use_container_width=True):
+            if st.button("🚨 VYMAZAT KOMPLETNĚ CELÝ DENÍK NÁVŠTĚV", use_container_width=True):
                 st.session_state["confirm_wipe_out_all"] = True
                 st.rerun()
         else:
@@ -459,7 +461,6 @@ def vykresli_aplikaci():
                     except: status_badge = "🟢 V plánu"
                     t_id = row_u["TaskID"] if "TaskID" in row_u and pd.notna(row_u["TaskID"]) else f"OLD_ROW_{idx}"
                     
-                    # Pokud je úkol označen jako vyřízený, změní barvu statusu
                     kurentni_stav = row_u.get("Stav", "Aktivní")
                     if kurentni_stav == "Vyřízeno": status_badge = "✅ Vyřízeno"
                     
@@ -480,7 +481,6 @@ def vykresli_aplikaci():
                         
                         st.write("")
                         
-                        # 🟢 KROK 1: ŘÁDEK VYŘÍZENO (Změní stav úkolu hned bez ptaní a rozsvítí ✅)
                         if kurentni_stav == "Aktivní":
                             if st.button("✅ Označit úkol jako VYŘÍZENÝ", key=f"btn_mark_done_{t_id}", use_container_width=True):
                                 df_ukoly.at[idx, "Stav"] = "Vyřízeno"
@@ -489,16 +489,14 @@ def vykresli_aplikaci():
                         else:
                             st.caption("👍 Tento úkol je úspěšně vyřízen.")
 
-                        # 🟢 KROK 2: ŘÁDEK SMAZAT (Rozbalí přehlednou, tmavou kolonku na potvrzení)
                         pojistka_u_key = f"confirm_task_wipe_{t_id}"
                         if pojistka_u_key not in st.session_state: st.session_state[pojistka_u_key] = False
                         
                         if not st.session_state[pojistka_u_key]:
                             if st.button("🗑️ Natvrdo SMAZAT úkol z mobilu", key=f"init_del_task_{t_id}", use_container_width=True):
                                 st.session_state[pojistka_u_key] = True
-                                st.rerun()
+                                .rerun()
                         else:
-                            # 🟢 DOKONALÁ ČITELNOST: Tmavé pozadí, bílý tučný text. Žádná nečitelná bílá na růžové!
                             st.markdown("<div style='background-color:#212121; color:#ffffff; padding:12px; border-radius:5px; border-left:5px solid #ef5350; margin-top:10px; margin-bottom:10px;'><b>⚠️ OPRAVDU CHCETE TENTO ÚKOL NATVRDO SMAZAT?</b></div>", unsafe_allow_html=True)
                             col_click1, col_click2 = st.columns(2)
                             with col_click1:
